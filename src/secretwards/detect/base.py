@@ -1,7 +1,25 @@
 """Shared helpers for detectors: collecting spans on normalized text and mapping them back."""
 from __future__ import annotations
 
+import bisect
+
 from ..contracts import PIIType, Span, Unit
+
+
+class SpanIndex:
+    """'Does [a, b) overlap any of these spans?' in O(log n) (the naive scan made big notes quadratic)."""
+
+    def __init__(self, spans):
+        items = sorted((s.start, s.end) for s in spans)
+        self._starts = [a for a, _ in items]
+        self._pmax, m = [], -1
+        for _, e in items:
+            m = max(m, e)
+            self._pmax.append(m)
+
+    def overlaps(self, a: int, b: int) -> bool:
+        i = bisect.bisect_left(self._starts, b) - 1  # last span starting before b
+        return i >= 0 and self._pmax[i] > a
 
 
 class Collector:

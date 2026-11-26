@@ -14,6 +14,7 @@ import regex as re
 
 from ..contracts import PIIType, Span, Unit
 from ..normalize.translit import skeleton
+from .base import SpanIndex
 from . import lexicon as L
 
 _WORD = re.compile(r"[\p{L}\p{M}]+")
@@ -53,6 +54,7 @@ class NameMemory:
     def find(self, unit: Unit, existing: list[Span]) -> list[Span]:
         out: list[Span] = []
         text = unit.original
+        taken = SpanIndex(existing)
         for m in _WORD.finditer(text):
             w = m.group()
             if len(w) < 3:
@@ -65,7 +67,7 @@ class NameMemory:
                 hit = w.lower() in self.lat and _ok(w)
             if not hit:
                 continue
-            if any(s.start < b and a < s.end for s in existing):
+            if taken.overlaps(a, b):
                 continue
             out.append(Span(unit.doc_id, unit.field, a, b, PIIType.NAME, "learned", 0.6, ""))
         return out

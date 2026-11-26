@@ -8,6 +8,7 @@ import regex as re
 from ..contracts import Detector, MedKind, MedSpan, PIIType, Span, Unit
 from . import lexicon as L
 from .address import AddressDetector
+from .base import SpanIndex
 from .address_fields import AddressFieldDetector
 from .hidden import HiddenDetector
 from .india_ids import IndiaIdDetector
@@ -72,6 +73,7 @@ def propagate_names(units: Sequence[Unit], per_unit: dict[tuple[str | None], lis
         return extra
     for u in units:
         have = per_unit.get(u.field, [])
+        taken = SpanIndex(have)
         for m in _WORD.finditer(u.original):
             w = m.group()
             if len(w) < 3:
@@ -86,7 +88,7 @@ def propagate_names(units: Sequence[Unit], per_unit: dict[tuple[str | None], lis
             if not hit:
                 continue
             a, b = m.start(), m.end()
-            if any(s.start < b and a < s.end for s in have):
+            if taken.overlaps(a, b):
                 continue
             extra.setdefault(u.field, []).append(Span(u.doc_id, u.field, a, b, PIIType.NAME, "propagate", 0.6, ""))
     return extra
