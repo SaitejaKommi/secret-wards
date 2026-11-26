@@ -105,8 +105,8 @@ def test_hospital_number_after_label(label):
 
 def test_prefix_letters_and_digits_go_together():
     # a partial match (letters only) would leave the digits visible
-    text = "पंजीकरण सं.: ABC/25/064127"
-    assert covered(text, "ABC/25/064127")
+    text = "पंजीकरण सं.: ABC/25/073318"
+    assert covered(text, "ABC/25/073318")
 
 
 @pytest.mark.parametrize("hdr", ["Panjikaran", "IPD No", "admission_no", "पंजीकरण संख्या"])
