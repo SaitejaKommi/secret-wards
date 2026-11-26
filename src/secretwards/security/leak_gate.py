@@ -104,7 +104,7 @@ def _mask_uuids(text: str) -> str:
     return UUID_LIKE.sub(lambda m: " " * (m.end() - m.start()), text)
 
 
-def scan(rv: RawValues, text: str) -> dict[str, int]:
+def scan(rv: RawValues, text: str, names: bool = True) -> dict[str, int]:
     """Count leaks of each kind in one piece of output text."""
     hits = defaultdict(int)
     if not text:
@@ -112,7 +112,7 @@ def scan(rv: RawValues, text: str) -> dict[str, int]:
     n = _mask_uuids(normalize(text).text)
     view = ocr_digit_view(n)
     doc_words = _doctor_words(n)
-    for m in _WORD.finditer(n):
+    for m in _WORD.finditer(n if names else ""):
         if m.group().lower() in rv.names and (m.start(), m.end()) not in doc_words:
             hits["name"] += 1
     # digit streams: join digits inside each whitespace/punct-separated numeric chain
@@ -149,7 +149,7 @@ def scan(rv: RawValues, text: str) -> dict[str, int]:
     return hits
 
 
-def _repair(rv: RawValues, text: str, seen: set | None = None) -> str:
+def _repair(rv: RawValues, text: str, seen: set | None = None, names: bool = True) -> str:
     """Replace leaked words / identifier-looking strings by placeholders."""
     if not text:
         return text
@@ -157,7 +157,7 @@ def _repair(rv: RawValues, text: str, seen: set | None = None) -> str:
     ntext = _mask_uuids(n.text)
     spans: list[tuple[int, int, str]] = []
     doc_words = _doctor_words(ntext)
-    for m in _WORD.finditer(ntext):
+    for m in _WORD.finditer(ntext if names else ""):
         if m.group().lower() in rv.names and (m.start(), m.end()) not in doc_words:
             a, b = n.to_orig(m.start(), m.end())
             spans.append((a, b, "[NAME]"))
@@ -190,9 +190,12 @@ def _repair(rv: RawValues, text: str, seen: set | None = None) -> str:
     return "".join(out)
 
 
-def gate(records: dict[str, RedactedRecord], results, cfg, mode: str = "quarantine") -> tuple[dict[str, RedactedRecord], list[QuarantineEntry], dict]:
+def gate(records: dict[str, RedactedRecord], results, cfg, mode: str = "quarantine",
+         name_exempt: dict[str, frozenset] | None = None) -> tuple[dict[str, RedactedRecord], list[QuarantineEntry], dict]:
     """mode "quarantine" (legacy): a record that still leaks after repair is dropped.
-    mode "redact" (output contract): never drop a record; blank only the field that still leaks."""
+    mode "redact" (output contract): never drop a record; blank only the field that still leaks.
+    `name_exempt` {doc_id: fields}: fields where a learned name word is NOT a leak because the format says the leaf is not a person
+    (a FHIR Organization name that shares a word with a patient's name). Phones, ids and e-mails are still checked there."""
     rv = collect(results)
     stats = defaultdict(int)
     repaired_words: set[str] = set()
@@ -200,6 +203,7 @@ def gate(records: dict[str, RedactedRecord], results, cfg, mode: str = "quaranti
     quarantined: list[QuarantineEntry] = []
     for doc_id, rec in records.items():
         res = results[doc_id]
+        exempt = (name_exempt or {}).get(doc_id, frozenset())
         own_dates = set()
         for u in res.units:
             for s in res.spans[u.field]:
@@ -209,7 +213,7 @@ def gate(records: dict[str, RedactedRecord], results, cfg, mode: str = "quaranti
             units = [("text", rec.text)] + [(k, v) for k, v in rec.fields.items()]
             hits: dict[str, int] = defaultdict(int)
             for _k, v in units:
-                for kind, c in scan(rv, v).items():
+                for kind, c in scan(rv, v, _k not in exempt).items():
                     hits[kind] += c
                 nt = normalize(v).text
                 for dm in find_dates(nt):
@@ -222,7 +226,7 @@ def gate(records: dict[str, RedactedRecord], results, cfg, mode: str = "quaranti
             if attempt == 0:
                 rec.text = _repair(rv, rec.text, repaired_words)
                 for k in list(rec.fields):
-                    rec.fields[k] = _repair(rv, rec.fields[k], repaired_words)
+                    rec.fields[k] = _repair(rv, rec.fields[k], repaired_words, k not in exempt)
         else:
             if mode != "redact":
                 quarantined.append(QuarantineEntry(doc_id, QReason.LEAK_GATE, "record"))
@@ -230,7 +234,7 @@ def gate(records: dict[str, RedactedRecord], results, cfg, mode: str = "quaranti
             if scan(rv, rec.text):
                 rec.text = "[REDACTED]"
             for k in list(rec.fields):
-                if scan(rv, rec.fields[k]):
+                if scan(rv, rec.fields[k], k not in exempt):
                     rec.fields[k] = "[REDACTED]"
             stats["fields_blanked"] += 1
         kept[doc_id] = rec

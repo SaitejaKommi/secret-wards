@@ -175,7 +175,6 @@ def test_contract_run_with_policy(tmp_path, monkeypatch):
     assert [c for c, _ in validate_bundle(b) if c != "bad_element_name"] == []
 
 
-# The next one is in Saiteja's files (reported on the PR); non-strict so it does not block anyone.
 # fixed: contract/renamer.py no longer treats a plain lowercase schema word such as 'extension' as personal data
 def test_extension_element_keeps_its_name(tmp_path, monkeypatch):
     _raw, b = _run_with_policy(tmp_path, monkeypatch, bundle())
@@ -183,8 +182,7 @@ def test_extension_element_keeps_its_name(tmp_path, monkeypatch):
     assert validate_bundle(b) == []
 
 
-@pytest.mark.xfail(reason="security/leak_gate.py repairs every learned patient-name word, also inside a hospital name the "
-                          "FHIR policy keeps")
+# fixed: the leak gate skips the name-word check in leaves the FHIR policy keeps (gate(..., name_exempt=...))
 def test_hospital_sharing_a_word_with_the_patient_is_kept(tmp_path, monkeypatch):
     b = bundle()
     b["entry"][2]["resource"]["name"] = "Tejbir Memorial Seva Niketan"

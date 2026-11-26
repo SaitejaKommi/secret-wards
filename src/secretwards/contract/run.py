@@ -22,7 +22,7 @@ from ..contracts import PIIType, RedactedRecord
 from ..detect import default_detectors
 from ..detect.hidden import clean_encoded
 from ..detect.learned import NameMemory
-from ..fhir.sanitize import apply_bundle_policy, is_bundle
+from ..fhir.sanitize import apply_bundle_policy, bundle_actions, is_bundle
 from ..detect.merge import UUID_LIKE
 from ..link import link_documents
 from ..link.mention import build_mention
@@ -255,7 +255,10 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
             claim[doc.doc_id] = ps if (linked and embedded) else None
 
     # ---- 5. leak gate (repair only: never drops a record)
-    red, _gated, gate_stats = gate(red, results, cfg, mode="redact")
+    # leaves the FHIR policy keeps (hospital, doctor, codes) are not people: a learned patient-name word inside them is not a leak
+    exempt = {d: frozenset(f for f, a in bundle_actions(r.doc.fields).items() if a == "keep")
+              for d, r in results.items() if is_bundle(r.doc.fields)}
+    red, _gated, gate_stats = gate(red, results, cfg, mode="redact", name_exempt=exempt)
 
     # ---- 6. rebuild every file in its original format
     renamer = Renamer(keys, detectors, mem)
