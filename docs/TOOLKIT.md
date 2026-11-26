@@ -109,7 +109,7 @@ Official score today: not computable. With the contract missing the organisers' 
 | 9 | Hidden places: file names, headers, keys, metadata (`source_path`), FHIR narrative, base64 attachments | we hash names/keys; no base64 decoding; no metadata rules | metadata leaked 37.5%, base64 10% on the practice mirror |
 | 10 | Entity types include AADHAAR (12 digits, masked), PAN, VILLAGE, LOCALITY, HOUSE, LANDMARK, DOB, relative names | no PAN, partial Aadhaar, weak village/locality | PAN 95% and Aadhaar 31% leaked |
 | 11 | Dropping records or files is punished (record retention, schema, silent drop -10) | the leak gate quarantines whole records | must redact in place; quarantine only whole unprocessable files |
-| 12 | Privacy is judged by THEIR attacker (registry + known facts, A1-A7), relative to the raw data | our own self-made attack | build a stand-in attacker from `dev/attacker/` (Friend A) and tune against it |
+| 12 | Privacy is judged by THEIR attacker (registry + known facts, A1-A7), relative to the raw data | our own self-made attack | build a stand-in attacker from `dev/attacker/` (Jaisheel) and tune against it |
 | 13 | A7: a different `RAKSHA_SECRET` must change pseudonyms AND date shifts | pseudonyms and shifts come from key files | fine once keys derive from the secret; add a test |
 | 14 | Generalization utility: age 5-year band 0.9, exact 1.0; village to tehsil/district 0.7-0.8 | k-anonymity ladder often gives "18-59" | utility vs privacy re-tuned against their formulas |
 | 15 | Leak counting normalises homoglyphs, zero-width, Indic digits, decodes base64/hex/entities | we normalise Indic digits and zero-width only | a disguised name still counts as a leak |
@@ -133,12 +133,12 @@ Official score today: not computable. With the contract missing the organisers' 
 ## 11. Plan to meet the contract (ordered by points and penalties). WAITING FOR THE LEAD'S OK before any code change
 | Step | What | Why first | Owner | Hours |
 |---|---|---|---|---|
-| P0 | Contract adapter: `raksha.toml`, root `main.py`, keys derived from `RAKSHA_SECRET`, mirror writer for `sanitized/`, in-place redaction (no dropped rows, no hashed headers), SHA-256 `report.json`, `records.jsonl`, exit codes, atomic output; stop quarantining records | without it every category is 0 and the -10 false-success and -20 raw-copy penalties are live | Lead | 8 |
-| P1 | Fix gate over-quarantine and quadratic merge; Linux run in CI | penalties, reliability, time | Lead | 4 |
-| P2 | New detectors from the practice types: Aadhaar (12 digits, masked), PAN, village/locality/house/landmark by context and by column, DOB; base64 decode and clean; metadata and key rules; file-name sanitising; Devanagari/Hinglish relatives | detection 20 + leaks -1 each + canaries -3 each | Friend A | 12 |
-| P3 | FHIR-aware sanitizer (valid R4, references resolve, valid dateTime after shifting) and JSON type preservation | integrity 10 and every JSON/FHIR file | Friend B | 6 |
-| P4 | Stand-in attacker from `dev/attacker/` (A1-A5), tune generalization and rare-value suppression against it; shift defence against global-shift recovery | privacy 25 + utility coupling | Friend A | 8 |
-| P5 | Identity: write pseudonym inside records, link through ids/name+relative, null when weak; homonym tests from `truth.traps` | identity 15 | Lead | 5 |
-| P6 | Security and honesty: no side-channel leaks, report cross-checks, encryption of any intermediate (we write none), PII-free logs test on the contract path | integrity, canaries | Friend B | 5 |
-| P7 | README, 2-page PDF brief with measured numbers, public repo, `check_submission.py --run` green on Linux | submission eligibility | Friend B + Lead | 5 |
-Total about 53 hours of work across three people (estimates, not measurements).
+| P0 | Contract adapter: `raksha.toml`, root `main.py`, keys derived from `RAKSHA_SECRET`, mirror writer for `sanitized/`, in-place redaction (no dropped rows, no hashed headers), SHA-256 `report.json`, `records.jsonl`, exit codes, atomic output; stop quarantining records | without it every category is 0 and the -10 false-success and -20 raw-copy penalties are live | Saiteja | 8 |
+| P1 | Fix gate over-quarantine and quadratic merge; Linux run in CI | penalties, reliability, time | Saiteja | 4 |
+| P2 | New detectors from the practice types: Aadhaar (12 digits, masked), PAN, village/locality/house/landmark by context and by column, DOB; base64 decode and clean; metadata and key rules; file-name sanitising; Devanagari/Hinglish relatives | detection 20 + leaks -1 each + canaries -3 each | Jaisheel | 12 |
+| P3 | FHIR-aware sanitizer (valid R4, references resolve, valid dateTime after shifting) and JSON type preservation | integrity 10 and every JSON/FHIR file | Jaisheel | 6 |
+| P4 | Stand-in attacker from `dev/attacker/` (A1-A5), tune generalization and rare-value suppression against it; shift defence against global-shift recovery | privacy 25 + utility coupling | Jaisheel | 8 |
+| P5 | Identity: write pseudonym inside records, link through ids/name+relative, null when weak; homonym tests from `truth.traps` | identity 15 | Saiteja | 5 |
+| P6 | Security and honesty: no side-channel leaks, report cross-checks, encryption of any intermediate (we write none), PII-free logs test on the contract path | integrity, canaries | Saiteja | 5 |
+| P7 | README, 2-page PDF brief with measured numbers, public repo, `check_submission.py --run` green on Linux | submission eligibility | Saiteja | 5 |
+Total about 53 hours across two people: Saiteja about 27 hours (P0, P1, P5, P6, P7), Jaisheel about 26 hours (P2, P3, P4). Estimates, not measurements. Details: `docs/FRIEND_TASKS.md`.

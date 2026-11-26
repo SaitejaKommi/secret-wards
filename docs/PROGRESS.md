@@ -7,10 +7,10 @@ Team tasks and setup: see `FRIEND_TASKS.md`. Figures below were measured by runn
 The organisers' kit (https://github.com/Reinforce-SST/Secret-Wards-ToolKit, copy of its docs in `toolkit/`, analysis in `TOOLKIT.md`) defines a strict contract: `raksha.toml`, `main.py`,
 `RAKSHA_SECRET`, `sanitized/` mirror, `report.json` with SHA-256 per input file, `records.jsonl`. **Our code does not meet it yet** (measured: `validate_output.py` crashes on our report; `check_submission.py` fails on
 missing `raksha.toml`; our leak gate quarantined 382 of 1,209 records on the practice data). Plan P0-P7 and every conflict are in `TOOLKIT.md`. Official numbers on the practice data (kit starter): CONTRACT OK, 84.1% leaked.
-Status of the plan (lead OK needed before code changes): P0 contract adapter [ ], P1 gate + quadratic merge [ ], P2 India IDs / address fields / hidden places [ ] (Friend A), P3 FHIR-aware sanitizer [ ] (Friend B),
-P4 stand-in attacker + tuning [ ] (Friend A), P5 identity in `records.jsonl` [ ] (lead), P6 channel hygiene + security design [ ] (Friend B), P7 README + 2-page brief + public repo [ ] (Friend B + lead).
+Status of the plan (lead OK needed before code changes): P0 contract adapter [ ], P1 gate + quadratic merge [ ], P2 India IDs / address fields / hidden places [ ] (Jaisheel), P3 FHIR-aware sanitizer [ ] (Jaisheel),
+P4 stand-in attacker + tuning [ ] (Jaisheel), P5 identity in `records.jsonl` [ ] (Saiteja), P6 channel hygiene + security design [ ] (Saiteja), P7 README + 2-page brief + public repo [ ] (Saiteja). Team is two people now (Saiteja, Jaisheel); the third friend is busy.
 
-## Core (lead)
+## Core (Saiteja)
 - [x] M0 Skeleton, contracts (unchanged since M2), config, key handling, git repo (`main` @ 3e900b3)
 - [x] M1 Synthetic generator (dev / heldout / blind splits) with gold labels; scorer
 - [x] M2 End-to-end slice: CSV / TSV / JSON / JSONL / TXT / XLSX in; CSV / JSON / TXT out; report; quarantine
@@ -20,8 +20,8 @@ P4 stand-in attacker + tuning [ ] (Friend A), P5 identity in `records.jsonl` [ ]
 - [ ] Audit fixes (all still OPEN, verified by re-running on 2026-11-26): gate over-quarantine, quadratic merge, atomic output, phone/ID gaps, same-name merges
 
 ## Teammates
-- [ ] Friend A (branch `feat/detection`): India ID / address-field / hidden-place detectors, stand-in attacker, diagnosis key, CRF last (see FRIEND_TASKS.md section 5)
-- [ ] Friend B (branch `feat/output-security`): FHIR-aware sanitizer, honest security design, hygiene tests, Linux CI, README and 2-page brief (section 6)
+- [ ] Jaisheel (branches `feat/detection`, `feat/fhir`, `feat/attacker`): India ID / address-field / hidden-place detectors, FHIR sanitizer, stand-in attacker and tuning, diagnosis key, CRF last (docs/FRIEND_TASKS.md section 5)
+- [ ] Saiteja (branches `feat/contract`, `feat/identity`, `feat/hygiene`): contract adapter, gate and merge fixes, identity in records.jsonl, hygiene and security, README, brief (section 6)
 
 ## Metrics (synthetic; fresh seeds 991 / 992 / 993, audit of 2026-11-26)
 Leak = share of gold PII strings still in the same record's output. Medical kept counts a generalized age as kept when its band holds the true age.
@@ -56,7 +56,7 @@ technical report; CRF; stronger attack. Exact ages kept for only 13-42% of recor
 2. WhatsApp timestamps were dates but unlabelled: now `DATE`.
 3. Lab "Sample ID" is an identifier but was unlabelled: now `ID`.
 
-## Decisions waiting for the lead
+## Decisions waiting for Saiteja
 1. Age accuracy versus attack resistance: `qi_include_dx` (true: exact age 38%, unique-match 0.8%; false: exact age 82%, unique-match 59%, at 1500 patients).
 2. Real run: put `keys_dir` outside the project folder.
 
