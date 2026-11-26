@@ -1,0 +1,21 @@
+# secretwards run --in data/in --out out --config config.example.toml
+# Every value here is optional; the defaults are shown. Key FILES live in keys_dir (never commit them).
+keys_dir = "keys"          # created by `secretwards keygen`
+seed = 1337                # reserved; the pipeline has no randomness of its own
+
+[linkage]
+link_threshold = 6.0       # minimum pair score; a strong non-name agreement is always required as well
+block_cap = 60             # skip non-ID blocks larger than this
+
+[privacy]
+date_shift_min_days = 30   # per-patient shift magnitude (days), sign and size keyed by date.key
+date_shift_max_days = 365
+k_target = 5               # records in smaller classes are generalized step by step
+age_band_width = 5
+age_top_code = 90          # ages >= this are released as "90+"
+pin_keep_digits = 3
+rare_dx_max_patients = 1   # a diagnosis held by <= this many patients may be suppressed when still identifying
+
+[limits]
+max_file_mb = 200
+max_unzipped_mb = 800      # xlsx zip-bomb guard

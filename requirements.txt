@@ -1,0 +1,9 @@
+# Exact versions the numbers in docs/PROGRESS.md were measured with (Python 3.11).
+regex==2026.11.24
+RapidFuzz==3.14.6
+openpyxl==3.1.5
+et_xmlfile==2.0.0
+cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.12
+pytest==9.2.0   # tests only

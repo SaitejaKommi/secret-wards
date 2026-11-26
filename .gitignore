@@ -1,0 +1,12 @@
+docs-wt/
+data/
+out/
+keys/
+*.key
+.env
+.venv/
+KICKOFF.md
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/

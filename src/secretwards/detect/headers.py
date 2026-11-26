@@ -1,0 +1,61 @@
+"""Column-header hints. Hints only raise priors; content validators always run too,
+because exported tables often have shifted columns."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import regex as re
+
+
+@dataclass(frozen=True)
+class Hint:
+    kind: str  # name phone email address city pin dob date id age sex ""
+    role: str = ""
+
+
+_REL = re.compile(r"guardian|father|husband|relative|attendant|kin|spouse|wife|mother|पिता|पति|पत्नी|अभिभावक|नाम\s*\(?\s*पिता", re.I)
+_DOC = re.compile(r"doctor|\bdr\b|consultant|referred|physician|डॉ", re.I)
+_NAME = re.compile(r"\bname\b|\bnaam\b|\bnm\b|नाम|^pt\b|\bpatient\b|\bpt\b|\bmember\b|रोगी|मरीज", re.I)
+_PHONE = re.compile(r"phone|mobile|contact|\btel\b|\bcell\b|whatsapp|मोबाइल|फोन|फ़ोन|संपर्क", re.I)
+_EMAIL = re.compile(r"e-?mail|ईमेल", re.I)
+_ADDR = re.compile(r"address|\baddr\b|residence|\bpata\b|पता|ghar|locality|village|mohalla|मोहल्ला", re.I)
+_CITY = re.compile(r"\bcity\b|\btown\b|district|शहर|जिला", re.I)
+_PIN = re.compile(r"\bpin\b|pincode|\bzip\b|postal|पिन", re.I)
+_DOB = re.compile(r"\bdob\b|birth|d\.o\.b|जन्म", re.I)
+_DATE = re.compile(r"\bdate\b|\bdt\b|admit|admission|discharge|\bdoa\b|\bdod\b|तिथि|तारीख|भर्ती|छुट्टी|tareekh", re.I)
+_ID = re.compile(r"\bmrn\b|uhid|\breg\b|registration|\buid\b|\bid\b|\bno\.?$|number|संख्या|क्रम|abha|insurance|policy|\bhospital no", re.I)
+_AGE = re.compile(r"\bage\b|\byears?\b|\bumar\b|आयु|उम्र|\bage/sex\b|\bage/gender\b", re.I)
+_SEX = re.compile(r"\bsex\b|gender|लिंग|\bm/f\b", re.I)
+
+
+def hint_for(header: str) -> Hint:
+    h = header.strip().lower()
+    if not h:
+        return Hint("")
+    if _EMAIL.search(h):
+        return Hint("email")
+    if _PHONE.search(h):
+        return Hint("phone")
+    if _DOB.search(h):
+        return Hint("dob")
+    if _PIN.search(h):
+        return Hint("pin")
+    if _REL.search(h) and (_NAME.search(h) or "father" in h or "husband" in h or "guardian" in h or "पिता" in h or "पति" in h):
+        return Hint("name", "relative")
+    if _DOC.search(h):
+        return Hint("name", "doctor")
+    if _ADDR.search(h):
+        return Hint("address")
+    if _CITY.search(h):
+        return Hint("city")
+    if _ID.search(h):
+        return Hint("id")
+    if _AGE.search(h) and not _SEX.search(h.replace("age/sex", "")):
+        return Hint("age")
+    if _SEX.search(h):
+        return Hint("sex")
+    if _DATE.search(h):
+        return Hint("date")
+    if _NAME.search(h):
+        return Hint("name", "patient")
+    return Hint("")
