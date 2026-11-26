@@ -65,7 +65,7 @@ def inner_spans(text: str, header: str = "", types=frozenset(_PII_TYPES)) -> lis
 
 # ---------------------------------------------------------------- name components (files, folders, path segments)
 _SEP = re.compile(r"[_.\s]+")
-# lowercase-tolerant hospital numbers as they appear in file names: ipd-2026-00474, adm000178, uhid-010607
+# lowercase-tolerant hospital numbers as they appear in file names: ipd-2031-00812, adm004417, uhid-009153 (invented examples)
 _ID_TOKEN = re.compile(r"^[A-Za-z]{1,6}(?:-[A-Za-z]{1,6})?[-/]?\d+(?:[-/]\d+)*$")
 
 
