@@ -65,6 +65,19 @@ def load_keys(keys_dir: str | Path) -> Keys:
     return Keys(**vals)
 
 
+def keys_from_secret(secret: bytes) -> Keys:
+    """Derive all four sub-keys from the evaluator's RAKSHA_SECRET (one label per purpose).
+    Nothing is read from disk, so the run needs no keys/ folder; a different secret gives unrelated keys."""
+    if not secret:
+        raise KeysMissing("secret")
+    prk = hmac.new(b"secret-wards|kdf|v1", secret, hashlib.sha256).digest()
+
+    def sub(label: bytes) -> bytes:
+        return hmac.new(prk, b"secret-wards|" + label + b"|1", hashlib.sha256).digest()
+
+    return Keys(docid=sub(b"docid"), pseudonym=sub(b"pseudonym"), date=sub(b"date"), enc=sub(b"enc"))
+
+
 def hmac_hex(key: bytes, *parts: str, n: int = 16) -> str:
     """Domain-separated keyed hash of the given parts, hex, first n chars."""
     h = hmac.new(key, digestmod=hashlib.sha256)

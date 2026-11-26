@@ -26,6 +26,20 @@ from ..normalize.text import normalize, ocr_digit_view
 _WORD = re.compile(r"[\p{L}\p{M}]+")
 _PHONE_RES = re.compile(r"(?<!\d)(?:\+?91[\s\-.]*)?[6-9](?:[\s\-.]?\d){9}(?!\d)")
 _EMAIL_RES = re.compile(r"[\p{L}\d._%+\-]+@[\p{L}\d\-]+(?:\.[\p{L}\d\-]+)+")
+_DOCTOR = re.compile(
+    r"(?<![\p{L}\d])(?:Dr|DR|dr|Doctor|डॉ|डॉक्टर)\.?\s*((?:[\p{Lu}][\p{L}'’\-]*\.?|[\u0900-\u097F]+)"
+    r"(?:\s+(?:[\p{Lu}][\p{L}'’\-]*\.?|[\u0900-\u097F]+)){0,2})")
+
+
+def _doctor_words(n: str) -> set[tuple[int, int]]:
+    """(start, end) of every word inside a 'Dr. X Y' mention of the normalized text."""
+    out: set[tuple[int, int]] = set()
+    for m in _DOCTOR.finditer(n):
+        for w in _WORD.finditer(n, m.start(1), m.end(1)):
+            out.add((w.start(), w.end()))
+    return out
+
+
 _ABHA_RES = re.compile(r"(?<!\d)(?:\d{2}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4}|\d{14})(?!\d)")
 
 
@@ -46,6 +60,8 @@ def collect(results) -> RawValues:
                 raw = u.original[s.start:s.end]
                 t = s.type
                 if t == PIIType.NAME:
+                    if s.role == "doctor":
+                        continue  # "Dr. <name>" lines are medical context and stay in the release
                     for m in _WORD.finditer(raw):
                         w = m.group()
                         wl = w.lower()
@@ -66,7 +82,8 @@ def collect(results) -> RawValues:
                         rv.abha.add(d)
                 elif t in ID_TYPES:
                     a = re.sub(r"[^A-Za-z0-9]", "", raw).upper()
-                    if len(a) >= 6:
+                    nd = sum(ch.isdigit() for ch in a)
+                    if len(a) >= 6 and nd >= 3 and nd >= 0.3 * len(a):  # real ids, not words that landed in an id column
                         rv.alnum[len(a)].add(a)
     return rv
 
@@ -83,8 +100,9 @@ def scan(rv: RawValues, text: str) -> dict[str, int]:
         return hits
     n = normalize(text).text
     view = ocr_digit_view(n)
+    doc_words = _doctor_words(n)
     for m in _WORD.finditer(n):
-        if m.group().lower() in rv.names:
+        if m.group().lower() in rv.names and (m.start(), m.end()) not in doc_words:
             hits["name"] += 1
     # digit streams: join digits inside each whitespace/punct-separated numeric chain
     chains = re.findall(r"\+?\d[\d\s\-.()]*\d", view)
@@ -126,8 +144,9 @@ def _repair(rv: RawValues, text: str, seen: set | None = None) -> str:
         return text
     n = normalize(text)
     spans: list[tuple[int, int, str]] = []
+    doc_words = _doctor_words(n.text)
     for m in _WORD.finditer(n.text):
-        if m.group().lower() in rv.names:
+        if m.group().lower() in rv.names and (m.start(), m.end()) not in doc_words:
             a, b = n.to_orig(m.start(), m.end())
             spans.append((a, b, "[NAME]"))
             if seen is not None:
@@ -159,7 +178,9 @@ def _repair(rv: RawValues, text: str, seen: set | None = None) -> str:
     return "".join(out)
 
 
-def gate(records: dict[str, RedactedRecord], results, cfg) -> tuple[dict[str, RedactedRecord], list[QuarantineEntry], dict]:
+def gate(records: dict[str, RedactedRecord], results, cfg, mode: str = "quarantine") -> tuple[dict[str, RedactedRecord], list[QuarantineEntry], dict]:
+    """mode "quarantine" (legacy): a record that still leaks after repair is dropped.
+    mode "redact" (output contract): never drop a record; blank only the field that still leaks."""
     rv = collect(results)
     stats = defaultdict(int)
     repaired_words: set[str] = set()
@@ -191,8 +212,15 @@ def gate(records: dict[str, RedactedRecord], results, cfg) -> tuple[dict[str, Re
                 for k in list(rec.fields):
                     rec.fields[k] = _repair(rv, rec.fields[k], repaired_words)
         else:
-            quarantined.append(QuarantineEntry(doc_id, QReason.LEAK_GATE, "record"))
-            continue
+            if mode != "redact":
+                quarantined.append(QuarantineEntry(doc_id, QReason.LEAK_GATE, "record"))
+                continue
+            if scan(rv, rec.text):
+                rec.text = "[REDACTED]"
+            for k in list(rec.fields):
+                if scan(rv, rec.fields[k]):
+                    rec.fields[k] = "[REDACTED]"
+            stats["fields_blanked"] += 1
         kept[doc_id] = rec
     stats["distinct_name_words_repaired"] = len(repaired_words)  # a count only: the words are PII-adjacent
     stats["records_checked"] = len(records)

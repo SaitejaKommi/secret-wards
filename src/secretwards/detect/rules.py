@@ -120,7 +120,8 @@ class RuleDetector:
                 col.add(s0, e0, PIIType.EMAIL, 0.6)
             elif hint.kind == "pin" and re.fullmatch(r"[1-9]\d{2}\s?\d{3}", view.strip()):
                 col.add(s0, e0, PIIType.PINCODE, 0.9)
-            elif hint.kind == "id" and any(c.isdigit() for c in stripped) and len(stripped) >= 4 and len(stripped) <= 40 \
+            elif hint.kind == "id" and nd >= 3 and nd >= 0.3 * len(stripped) and stripped.count(" ") <= 1 \
+                    and len(stripped) >= 4 and len(stripped) <= 40 \
                     and not any(x.type in (PIIType.MRN, PIIType.ABHA, PIIType.INSURANCE, PIIType.ID) for x in col.spans):
                 col.add(s0, e0, PIIType.MRN, 0.7)
             elif hint.kind in ("date", "dob") and not any(x.type == PIIType.DATE for x in col.spans) \
