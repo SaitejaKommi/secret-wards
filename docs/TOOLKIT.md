@@ -14,7 +14,9 @@ Rules for every person and every AI tool:
 ## 1. How to set up the kit (each teammate)
 ```
 cd ..                                                    # the folder that CONTAINS secret-wards/
-git clone https://github.com/Reinforce-SST/Secret-Wards-ToolKit.git
+git clone -c core.autocrlf=false https://github.com/Reinforce-SST/Secret-Wards-ToolKit.git
+# -c core.autocrlf=false is REQUIRED on Windows: a CRLF checkout changes the practice files' bytes, their SHA-256 no longer matches
+# the answer key and check_dev under-counts. Verify: all 200 files in dev/input must hash to the sha256 in dev/truth/truth.json.
 # layout:  hackathon/Secret-Wards-ToolKit   and   hackathon/secret-wards
 ```
 Read `Secret-Wards-ToolKit/START_HERE.md` (15 minutes). The kit itself uses only the Python standard library (3.10+).
@@ -81,7 +83,7 @@ python Secret-Wards-ToolKit/check_dev.py --output OUT
 # 3) pre-submit: raksha.toml, README, PDF, requirements; --run runs our command 3 times (contract, identical repeat, different secret, secret never written, input untouched)
 python Secret-Wards-ToolKit/check_submission.py --repo secret-wards --run
 ```
-Caveats found by reading and running them: `check_submission.py` looks for `.venv/bin` (Linux layout), so on Windows it will not put our venv first on PATH; its PDF check scans the whole repo
+Caveats found by reading and running them: on WINDOWS `check_submission.py --run` cannot work (it quotes paths with POSIX `shlex.quote`, so our run fails with 'input directory not found'; it also looks for `.venv/bin`); the same three checks (contract, identical repeat run, different secret, secret never written, input untouched) are covered by `tests/test_contract.py`, and a Linux run needs WSL, Docker or CI; its PDF check scans the whole repo
 folder including ignored `data/` (a stray PDF there gives a false "found"); `validate_output.py` crashes with a Python error if `report.json["files"]` is not a list; `check_dev.py` counts a
 record we never exported as "not leaked", so heavy quarantining looks good there but is punished officially (record retention, schema preservation).
 
@@ -94,6 +96,12 @@ record we never exported as "not leaked", so heavy quarantining looks good there
 | `check_submission.py` (static) on our repo | **FAIL: raksha.toml missing.** README ok, requirements ok, no `config/policy.yaml`. |
 | `check_dev.py` on a throwaway adapter that mirrors our per-file outputs into `sanitized/` (measurement only, 173 of 200 files mirrored) | 153 of 3230 entities leaked (4.7%): PAN 95.5% (we have no PAN detector), AADHAAR 31%, MRN 8.7%, VILLAGE 12%, PATIENT_NAME 0.9%, PHONE 1.9%, LOCALITY 2.9%, everything else 0%. By place: filename 100% (artefact of the mirror using input names), metadata 37.5%, base64 10%. Canaries 1 of 4 (may be the filename artefact). **Medical values kept 77.8% (3532 of 4542)** because quarantined records vanish. Linking not measurable (no `records.jsonl`). |
 Official score today: not computable. With the contract missing the organisers' run would score us as a failed/false-success run. After the contract adapter (plan below) the expected range on practice data is a guess, not a measurement.
+
+### 7b. After P0 (2026-11-26): the contract path exists (`python main.py`)
+Measured on `dev/input` with the kit checkers (kit cloned with LF endings; all 200 files match the key's hashes). See the table in `docs/PROGRESS.md` for the progression.
+Final state with Jaisheel's PR #1-#3 merged: `validate_output.py` **CONTRACT OK**; 193 files sanitized, 7 quarantined (all "either" in the key); 817 records; `check_dev.py`: **0.2% leaked (5 of 3,230, all house numbers)**,
+filename / metadata / base64 / key / header **0%**, **canaries 0 of 4**, **medical values kept 98.0%** (4758 of 4855), **linking precision 1.00, recall 0.61, F0.5 0.89, 0 wrong merges**, 0 raw copies; 6.5 s, 63 MB.
+Still lost: hospital names inside FHIR bundles (19 of 19; FHIR sanitizer, Jaisheel step 4), 17 district values (1 TSV, see PROGRESS), and ~80 other medical strings (diagnosis wording, medication lines in discharge notes).
 
 ## 8. Conflicts between the kit and our docs / code (each needs a decision or a fix)
 | # | Kit says | We have | Impact |
