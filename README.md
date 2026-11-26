@@ -41,7 +41,14 @@ pip install -e .
 Offline machine: on a networked machine run `pip download -r requirements.txt -d wheels`, copy `wheels/` over, then
 `pip install --no-index --find-links wheels -r requirements.txt`. Versions are pinned to what the reported numbers were measured with.
 
-## Run (same commands on both systems; use `\` instead of `/` in paths on Windows if your shell needs it)
+## Official contract run (what the organisers execute)
+```
+RAKSHA_SECRET=practice python main.py --input INPUT_DIR --output OUT_DIR      # PowerShell: $env:RAKSHA_SECRET="practice"
+```
+Writes `OUT_DIR/sanitized/` (same paths and formats as the input; names holding personal data are renamed and declared), `report.json` (written last) and `records.jsonl`.
+Exit 0 only for a complete release. `RAKSHA_SECRET` keys every pseudonym and date shift and is never written. Details: [`docs/TOOLKIT.md`](docs/TOOLKIT.md).
+
+## Our own development run (same commands on both systems; use `\` instead of `/` in paths on Windows if your shell needs it)
 ```
 python -m secretwards keygen                                   # once; creates ./keys (gitignored, never printed)
 python -m synth --split dev --seed 1 --n 150                   # also: --split heldout | blind
@@ -67,12 +74,12 @@ and `meta`), `report.json` (counts, quarantine reasons, privacy and risk numbers
 These numbers do not predict the hidden set.
 
 ## Known problems (open)
-- Leak gate can quarantine many records because of one misclassified cell (20 of 1034 on one fresh dev set).
 - Run time is quadratic for one large text file (about 15 s for 106 KB; a 4 MB file would hang).
-- A failed run leaves partial output behind (not atomic).
+- The legacy development run (`python -m secretwards run`) can leave partial output after a failure; the contract run (`main.py`) removes partial output and exits non-zero.
 - Leaks in hand probes: lowercase or Devanagari unseen names without any cue, phones written "9 8 7 6 5 ..." or "(98765) 01240", "policy no X" without a colon.
 - Same-name patients can merge when they share a father's name and birth year but have different phones.
-- No FHIR export, no encryption at rest, no audit trail, no technical report.
+- FHIR bundles are sanitized generically (hospital names inside them are lost, validity not checked yet); no encryption at rest, no audit trail, no technical report.
+- Official practice data (kit checkers): CONTRACT OK, 0.2% of identifiers leaked, 0 of 4 canaries, medical values kept 98.0%, linking precision 1.00 / recall 0.61 (details: `docs/PROGRESS.md`).
 
 ## Rules this repo follows
 No LLMs or large models; no network; no PII in outputs, logs, temp files, errors, tests or docs (synthetic data only); no hardcoding to our own

@@ -57,6 +57,12 @@ total normal abnormal positive negative high low mild moderate severe stable cri
 tablet capsule injection syrup ointment cream drops inhaler nebulization iv im sc po oral topical
 left right bilateral both upper lower anterior posterior sample collected results result test tests
 ok oral note notes remarks comments final principal primary secondary other others none nil
+medicine medicines neurology cardiology nephrology urology gastroenterology pulmonology orthopaedics orthopedics paediatrics pediatrics
+gynaecology gynecology obstetrics ophthalmology dermatology psychiatry oncology radiology anaesthesia anesthesia emergency casualty
+outpatient inpatient speciality specialty consultant resident intern
+serum plasma sodium potassium calcium chloride magnesium phosphorus albumin globulin protein hemogram haemogram lipid profile thyroid
+liver function kidney electrolytes culture widal differential count total fasting random postprandial
+htn dm dm2 t2dm t1dm ckd cad cva ihd copd bph uti urti lrti pcos gerd ra oa sle ards aki hiv hbv hcv ecg ncv eeg
 glucometer strips pharmacy counter reddy's morepen reddys id abha uhid sample superintendent director medical referral
 referred sincerely regards pathology specimen collected claim member hospital principal correspondence
 """)

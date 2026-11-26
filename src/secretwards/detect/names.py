@@ -44,7 +44,7 @@ _LABEL_DOC = re.compile(
     r"(?:referred\s*by|consultant|doctor|physician|treating\s*doctor|consulting\s*doctor|"
     r"डॉक्टर|चिकित्सक)\s*[:\-–=]+\s*", re.I)
 _REL_CUE = re.compile(
-    r"(?<![\p{L}\d])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o|c\s*/\s*o|son\s+of|daughter\s+of|wife\s+of|husband\s+of|"
+    r"(?<![\p{L}\d/])(?:s\s*/\s*o|d\s*/\s*o|w\s*/\s*o|c\s*/\s*o|son\s+of|daughter\s+of|wife\s+of|husband\s+of|"
     r"father|mother|husband|wife|guardian|attendant|brother|sister|uncle|aunty|"
     r"पुत्र|पुत्री|सुपुत्र|सुपुत्री|पत्नी|पिता|पति|माता|भाई|बहन|पिता का नाम|पति का नाम|pita ka naam|pati ka naam)(?![\p{L}])"
     r"\s*[:\-.]?\s*", re.I)
@@ -52,6 +52,8 @@ _HON_CUE = re.compile(
     r"(?<![\p{L}\d])(?:mr|mrs|ms|miss|shri|sh|smt|sri|master|kumari|km|late|baby|श्रीमती|श्रीमान|श्री|कुमारी|स्व)(?![\p{L}])\.?\s*", re.I)
 _DR_CUE = re.compile(r"(?<![\p{L}\d])(?:dr|prof|doctor|डॉक्टर|डॉ)(?![\p{L}])\.?\s*", re.I)
 _PT_WEAK = re.compile(r"(?<![\p{L}\d])(?:patient|pt|mareez|मरीज़?|रोगी)\s+(?=[A-Zऀ-ॿ])", re.I)
+_PLACE_LABEL = re.compile(
+    r"(?:dist(?:t|rict)?|tehsil|tahsil|teh|taluk[a]?|zila|jila|state|city|town|village|vill|post|thana|तहसील|जिला|राज्य|गाँव|ग्राम)\.?\s*[:\-]?\s*$", re.I)
 _RELATION_BEFORE = frozenset("s/o d/o w/o c/o".split())
 
 
@@ -257,7 +259,7 @@ class NameDetector:
                 if _is_deva(p.t) or p.t[0].isalpha():
                     emit(k - 1, k - 1, 0.7, "")
         # 7. capital runs
-        if self.heuristic:
+        if self.heuristic and hint.kind not in ("address", "city", "nonperson"):  # place columns hold place names, not people
             self._cap_runs(text, toks, taken, emit)
         return col.spans
 
@@ -284,5 +286,6 @@ class NameDetector:
                 if not all(w.isupper() for w in run) or i == 0 or text[:toks[i].s].endswith(": "):
                     line_start = toks[i].s == 0 or text[toks[i].s - 1] == "\n"
                     if not (line_start and len(run) < 3 and not text[:toks[i].s].strip() == ""):
-                        emit(i, j, 0.45, "")
+                        if not _PLACE_LABEL.search(text[max(0, toks[i].s - 16):toks[i].s]):  # "Distt. <place>" is not a person
+                            emit(i, j, 0.45, "")
             i = j + 1

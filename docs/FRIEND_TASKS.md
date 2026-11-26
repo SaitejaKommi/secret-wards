@@ -39,13 +39,22 @@ Linux / macOS: same, but `python3.11 -m venv .venv` and `source .venv/bin/activa
 **Official kit (next to the repo, NOT inside it):**
 ```
 cd ..                                             # the folder that contains secret-wards/
-git clone https://github.com/Reinforce-SST/Secret-Wards-ToolKit.git
+git clone -c core.autocrlf=false https://github.com/Reinforce-SST/Secret-Wards-ToolKit.git   # -c core.autocrlf=false is REQUIRED on Windows
 $env:RAKSHA_SECRET="practice"                     # PowerShell;  Linux/macOS: export RAKSHA_SECRET=practice
 python Secret-Wards-ToolKit/starter/main.py --input Secret-Wards-ToolKit/dev/input --output secret-wards/out/starter
 python Secret-Wards-ToolKit/validate_output.py --input Secret-Wards-ToolKit/dev/input --output secret-wards/out/starter   # CONTRACT OK
 python Secret-Wards-ToolKit/check_dev.py --output secret-wards/out/starter                                                # about 84% leaked: expected
 ```
-**Measure our detection on the practice data BEFORE the contract adapter (P0) exists** (temporary helper):
+**The contract path is now on `main` (after Saiteja's PR). Measure with the real run:**
+```
+cd secret-wards
+$env:RAKSHA_SECRET="practice"         # Linux: export RAKSHA_SECRET=practice
+python main.py --input ../Secret-Wards-ToolKit/dev/input --output out/ours
+python ../Secret-Wards-ToolKit/validate_output.py --input ../Secret-Wards-ToolKit/dev/input --output out/ours   # CONTRACT OK
+python ../Secret-Wards-ToolKit/check_dev.py --output out/ours
+```
+First check the kit is intact: all 200 files in `dev/input` must hash to the sha256 values in `dev/truth/truth.json` (a CRLF checkout breaks this).
+Old helper, for the legacy pipeline only:
 ```
 cd secret-wards
 python -m secretwards run --in ../Secret-Wards-ToolKit/dev/input --out out/ours
@@ -53,12 +62,12 @@ python scripts/adapt_for_checkdev.py ../Secret-Wards-ToolKit/dev/input out/ours 
 python ../Secret-Wards-ToolKit/check_dev.py --output out/ours_adapted
 ```
 (Baseline today: 4.7% leaked; PAN 95%, Aadhaar 31%, MRN 9%, village 12%, metadata 38%; medical kept 77.8% only because our leak gate drops records; filename 100% is an artefact of the helper.)
-After P0 is merged, the real command is `RAKSHA_SECRET=practice python main.py --input ../Secret-Wards-ToolKit/dev/input --output out/ours`, then the kit's two checkers on `out/ours`.
 
 ## 3. Real status (measured 2026-11-26; details in `docs/TOOLKIT.md` section 7)
 - Our synthetic data (own generator; does NOT predict the hidden set): PII recall 0.995-0.997, precision 0.977-0.996, medical kept 0.988-0.992, link precision 0.98-1.0, link recall 0.60-0.96, canaries 0/23.
 - Official practice data, kit starter: CONTRACT OK, 84.1% leaked, 4/4 canaries, score about 8.
-- Official practice data, our pipeline: **contract NOT met**; the leak gate quarantined 382 of 1,209 records; detection leaked 4.7% (via the helper); linking not measurable.
+- Official practice data, our contract path (P0 + Jaisheel PR #1-#3): **CONTRACT OK**; 0.2% leaked (5 house numbers), hiding places 0%, canaries 0/4, medical kept 98.0%, linking P 1.00 / R 0.61 / 0 wrong merges, 6.5 s.
+- Still open: FHIR sanitizing (hospital names in bundles lost), linking recall, coarse age bands, the stand-in attacker, one slow big-file case.
 - Known bugs (Saiteja): gate over-quarantine, quadratic time on one big text file, non-atomic output, a few phone/ID misses, same-name merges when phones differ.
 
 ## 4. Git workflow (both of you)
@@ -116,13 +125,14 @@ FIRST, before changing anything:
 1. Read CLAUDE.md, then docs/TOOLKIT.md, then docs/FRIEND_TASKS.md (sections 1-5 and 7). Skim docs/toolkit/docs/SPEC.md and SCORING.md.
 2. Set up: Python 3.11 venv in the repo (python -m venv .venv; activate it), pip install -r requirements.txt, pip install -e ., python -m secretwards keygen, python -m pytest -q (expect 100 passed).
    Tell me if anything fails; do not paper over it.
-3. Clone the organisers' kit NEXT TO the repo (not inside): git clone https://github.com/Reinforce-SST/Secret-Wards-ToolKit.git ../Secret-Wards-ToolKit. Read its START_HERE.md and its scripts before running them.
-   Run the baseline from docs/FRIEND_TASKS.md section 2 ("Measure our detection ...") and show me the check_dev numbers.
+3. Clone the organisers' kit NEXT TO the repo (not inside), with line endings untouched: git clone -c core.autocrlf=false https://github.com/Reinforce-SST/Secret-Wards-ToolKit.git ../Secret-Wards-ToolKit.
+   Verify all 200 files in ../Secret-Wards-ToolKit/dev/input hash to the sha256 values in dev/truth/truth.json (if not, re-clone with autocrlf off). Read its START_HERE.md and its scripts before running them.
+   Then run the real contract path from docs/FRIEND_TASKS.md section 2 (RAKSHA_SECRET=practice python main.py --input ../Secret-Wards-ToolKit/dev/input --output out/ours; validate_output.py; check_dev.py) and show me the numbers.
 4. Create the branch feat/detection from origin/main. Check git config user.name / user.email are MY GitHub account (noreply email).
 
 THEN do my tasks from docs/FRIEND_TASKS.md section 5, in order, one small commit each, each with tests, and after each step run: python -m pytest -q, the synthetic scorer
 (python -m synth --split dev --seed 1 --n 150; python -m secretwards run --in data/synth/dev/in --out out/dev --emit-spans; python -m eval --gold data/synth/dev/gold.json --out out/dev),
-and the kit check_dev.py via scripts/adapt_for_checkdev.py. Show me the numbers before and after each step. Update my rows in docs/PROGRESS.md.
+and the kit's validate_output.py and check_dev.py on the real contract run. Show me the numbers before and after each step. Update my rows in docs/PROGRESS.md.
 When a step is done: git push -u origin feat/detection and open a pull request into main with gh pr create (include the numbers); never push to main.
 
 HARD RULES: no LLMs or generative models, no model above 50M parameters, no network at run time, deterministic output, fake data only. NEVER hardcode names, numbers or values from the practice data or its
@@ -157,8 +167,8 @@ Review and merge Jaisheel's PRs; keep `docs/PROGRESS.md` current. Open decision:
 | `README.md`, `docs/*`, CI workflow, brief | Saiteja (Jaisheel updates only his rows in `docs/PROGRESS.md`) |
 
 ## 8. Order of work and hand-offs
-1. Day 1: Jaisheel starts steps 1-3 (independent, measured with the helper); Saiteja does P0 and merges it as early as possible.
-2. When P0 is merged: Jaisheel switches to measuring with the real contract run and does the FHIR sanitizer against Saiteja's `ctx`; Saiteja does P1 and P5.
+1. DONE: Jaisheel steps 1-2 (merged), Saiteja P0 + gate fixes (PR). Everyone measures with `python main.py` + the kit checkers.
+2. NEXT: Jaisheel step 3 (meaning traps, 5 house numbers), then the FHIR sanitizer (step 4) and the stand-in attacker; Saiteja P5 identity, P1 speed, the FHIR `ctx` hook, P6 and the README. Jaisheel: use `hidden.safe_label` / `sanitize_path` / `clean_encoded` from your own PR #2 when wiring FHIR; Saiteja's writer already renames paths and headers itself.
 3. Then: Jaisheel finishes the attacker and tuning; Saiteja does P6 and P7.
 4. Last 3 hours before the deadline: freeze features; run `check_submission.py --repo . --run`, fix only what it reports, make the repo public, final commit.
 

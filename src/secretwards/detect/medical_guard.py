@@ -26,7 +26,9 @@ _PATTERNS: list[tuple[MedKind, re.Pattern]] = [
         r"(?<![\p{L}])(?:Hb|WBC|TLC|Platelets?|PLT|Creatinine|Urea|RBS|FBS|PPBS|Na|K|CRP|ALT|AST|SGPT|SGOT|HbA1c|ESR|TSH|Bilirubin)"
         r"\s*[:=\-]?\s*\d+(?:\.\d+)?\s*(?:g/dL|mg/dL|mEq/L|/cumm|/mm3|%|U/L|mg/L|IU/L|ng/mL)?")),
     (MedKind.AGE, re.compile(
-        r"(?<![\p{L}\d./-])\d{1,3}\s*(?:years?|yrs?|y/o|yo|saal|वर्ष|साल|y)(?:\s*old)?(?![\p{L}\d])|(?<![\d])\d{1,3}\s*/\s*[MF](?![\p{L}])", re.I)),
+        r"(?<![\p{L}\d./-])(?<!(?:\bx|\bfor|\bsince|\blast|\bpast|\bover|\bnearly|\babout|\bapprox\.?|\bhistory\s+of)\s*)"
+        r"\d{1,3}\s*(?:years?|yrs?|y/o|yo|saal|वर्ष|साल|y)(?:\s*old)?(?![\p{L}\d])(?!\s*(?:back|ago|duration|of\s+(?:dm|htn|tb|diabetes)))"
+        r"|(?<![\d])\d{1,3}\s*/\s*[MF](?![\p{L}])", re.I)),
     (MedKind.LOS, re.compile(r"(?:length\s*of\s*stay|los|stay)\s*(?:\(days\))?\s*[:\-]?\s*\d+\s*(?:days?|दिन)?", re.I)),
 ]
 

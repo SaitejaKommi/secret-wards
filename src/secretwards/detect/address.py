@@ -28,8 +28,13 @@ _LANDMARK = re.compile(
 _LM_HINGLISH = re.compile(r"\s+ke\s+(?:paas|pass|samne|saamne|peeche|piche|bagal|nazdik|najdik)\b", re.I)
 _LM_DEV = re.compile(r"\s+के\s+(?:पास|सामने|पीछे|बगल|नजदीक|निकट)")
 _VILLAGE = re.compile(
-    r"(?<![\p{L}])(?:vill(?:age)?|post|p\.o\.?|dist(?:rict)?|tehsil|tahsil|teh|mandal|taluka|thana|p\.s\.)\.?\s*[:\-]?\s+(?=[A-Z])|"
-    r"(?:ग्राम|गाँव|पोस्ट|जिला|तहसील|थाना)(?![/:\s]*[/:])\s*[:\-]?\s*", re.I)
+    r"(?<![\p{L}])(?:vill(?:age)?|post|p\.o\.?|thana|p\.s\.)\.?\s*[:\-]?\s+(?=[A-Z])|"
+    r"(?:ग्राम|गाँव|पोस्ट|थाना)(?![/:\s]*[/:])\s*[:\-]?\s*", re.I)
+# a "City" / "Town" column in a rural export holds villages (redact); district / tehsil / state columns are what generalization keeps
+_KEEP_HDR = re.compile(r"district|distt|zila|jila|tehsil|tahsil|taluk|state|जिला|तहसील|राज्य", re.I)
+_KEEP_SEG = re.compile(r"^\s*(?:teh(?:sil)?\.?|tahsil|taluk[a]?|mandal|dist(?:t|rict)?\.?|zila|jila|state|तहसील|जिला|राज्य)(?![\p{L}])", re.I)
+_BARE_PIN = re.compile(r"(?<![\d.])[1-9]\d{5}(?![\d.])")
+_PIN_CTX = re.compile(r"(?<![\p{L}])(?:teh(?:sil)?|tahsil|distt?|district|village|vill|mohall?a|h\.?\s?no|c\s*/\s*o|near|address|pin|post|thana)(?![\p{L}])|तहसील|जिला|गाँव|ग्राम|पता|पिन", re.I)
 _LABEL = re.compile(
     r"(?<![\p{L}])(?:address(?:\s*for\s*correspondence)?|addr|residence|resident\s+of|r\s*/\s*o|res\.?|ghar\s*ka\s*pata|pata|permanent\s*address|"
     r"गाँव\s*/\s*मोहल्ला|गाँव/मोहल्ला|पता|निवासी|निवास)\s*[:\-–=]+\s*|(?<![\p{L}])(?:resident\s+of|r\s*/\s*o|living\s+(?:in|at)|lives\s+(?:in|at)|stays\s+(?:in|at)|staying\s+at)\s+", re.I)
@@ -65,7 +70,7 @@ class AddressDetector:
 
         def seg_is_addressy(seg: str) -> bool:
             s = seg.strip()
-            if not s or len(s) > 70:
+            if not s or len(s) > 70 or _KEEP_SEG.match(s):
                 return False
             ts = tokenize(s)
             words = [t for t in ts if t.t[0].isalpha() or "ऀ" <= t.t[0] <= "ॿ"]
@@ -217,6 +222,10 @@ class AddressDetector:
             while True:
                 s2, e2 = seg_bounds(pos)
                 seg = text[pos:e2]
+                km = _KEEP_SEG.match(seg)
+                if km:
+                    end = pos if pos > a else a
+                    break
                 cut = None
                 for t in tokenize(seg):
                     if _is_clause_word(t.t) and (t.t[0].isalpha()):
@@ -233,7 +242,7 @@ class AddressDetector:
                 break
             if end > a:
                 spans.append((a, end, 0.85))
-        if hint.kind in ("address", "city") and text.strip() and not re.fullmatch(r"[\d\s]+", text.strip()) and len(text) < 300:
+        if (hint.kind == "address" or (hint.kind == "city" and not _KEEP_HDR.search(unit.header))) and text.strip() and not re.fullmatch(r"[\d\s]+", text.strip()) and len(text) < 300:
             spans.append((0, len(text), 0.7))
 
         # extend over neighbouring address-looking comma segments and merge overlaps
@@ -256,4 +265,11 @@ class AddressDetector:
                 col.add(b + pm.start(1), b + pm.end(1), PIIType.PINCODE, 0.85)
                 # keep the cue word inside the address span end
             col.add(a, b, PIIType.ADDRESS, sc)
+        # a bare 6-digit PIN on a line that reads like an address (district / tehsil may sit between them)
+        pview = ocr_digit_view(text)
+        for pm in _BARE_PIN.finditer(pview):
+            ls = text.rfind("\n", 0, pm.start()) + 1
+            le = text.find("\n", pm.end())
+            if _PIN_CTX.search(text[ls: le if le >= 0 else len(text)].replace(text[pm.start():pm.end()], " ")):
+                col.add(pm.start(), pm.end(), PIIType.PINCODE, 0.8)
         return col.spans
