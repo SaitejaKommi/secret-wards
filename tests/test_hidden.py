@@ -204,3 +204,61 @@ def test_canonical_urls_are_kept():
 def test_url_with_patient_folder_is_redacted():
     url = "https://files.example.org/exports/Hemlata_HC_020311/report.pdf"
     assert covered(url, "Hemlata_HC_020311", field="url")
+
+
+# ---------------------------------------------------------------- encoded numbers (digits-only payloads)
+_PHONE = "9871234560"
+
+
+@pytest.mark.parametrize("encode", [
+    lambda s: s.encode().hex(),
+    lambda s: s.encode().hex().upper(),
+    lambda s: "".join(f"&#{ord(c)};" for c in s),
+    lambda s: "".join(f"&#x{ord(c):x};" for c in s),
+    lambda s: "".join(f"\\u{ord(c):04x}" for c in s),
+])
+def test_encoded_phone_is_removed(encode):
+    run = encode(_PHONE)
+    text = f"Contact {run} (attendant)"
+    assert covered(text, run)
+
+
+def test_hex_encoded_aadhaar_is_removed():
+    run = "486802461357".encode().hex()
+    assert covered(f"uid={run}", run)
+
+
+def _hidden_spans(text):
+    from secretwards.detect.hidden import HiddenDetector
+    return HiddenDetector().detect(make_unit("d", None, text))
+
+
+def test_hashes_and_plain_hex_ids_are_not_decoded_as_numbers():
+    import hashlib
+    for tok in (hashlib.sha256(b"x").hexdigest(), hashlib.md5(b"y").hexdigest(), "a1b2c3d4e5f60718293a"):
+        assert not _hidden_spans(f"ref {tok} end"), tok
+
+
+def test_encoded_number_that_is_not_pii_is_kept():
+    run = "".join(f"&#{ord(c)};" for c in "Batch 230415 exp 2027")
+    assert not _hidden_spans(f"Label: {run}")
+
+
+# Pre-existing in Saiteja's detectors (same result before this change); non-strict so nobody is blocked.
+@pytest.mark.xfail(reason="detect/rules.py finds a phone number among the digits of a SHA-256 hex string")
+def test_full_pipeline_keeps_a_hash():
+    import hashlib
+    tok = hashlib.sha256(b"x").hexdigest()
+    assert untouched(f"ref {tok} end", tok)
+
+
+@pytest.mark.xfail(reason="detect/address.py reads each '&#NN;' entity as a bare house number '#NN'")
+def test_full_pipeline_keeps_entity_text_without_pii():
+    run = "".join(f"&#{ord(c)};" for c in "Batch 230415 exp 2027")
+    assert untouched(f"Label: {run}", run)
+
+
+def test_clean_encoded_reencodes_a_hex_phone():
+    run = _PHONE.encode().hex()
+    out = clean_encoded(run, lambda s: s.replace(_PHONE, "[PHONE]"))
+    assert bytes.fromhex(out).decode() == "[PHONE]"
