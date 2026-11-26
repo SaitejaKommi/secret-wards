@@ -7,7 +7,7 @@ name = "secretwards"
 version = "0.1.0"
 description = "Offline, LLM-free de-identification and record linkage for English/Hindi/Hinglish hospital records"
 requires-python = ">=3.11"  # tomllib for config files
-dependencies = ["regex==2026.11.24", "rapidfuzz==3.14.6", "openpyxl==3.1.5", "cryptography==50.0.2"]
+dependencies = ["regex==2026.11.24", "rapidfuzz==3.14.6", "openpyxl==3.1.5"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
