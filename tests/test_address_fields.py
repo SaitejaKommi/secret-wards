@@ -113,7 +113,7 @@ def test_known_address_py_false_positives(text, keep):
 
 
 @pytest.mark.parametrize("text,value", [
-    ("Makan No. 41, Mohalla Neem Tola, Distt. Fatehganj", "Makan No. 41"),
+    ("Makan No. 67, Mohalla Neem Tola, Zila Fatehganj", "Makan No. 67"),
     ("makaan number 7/2, gali 3", "makaan number 7/2"),
     ("मकान नं. 58, वार्ड 6", "मकान नं. 58"),
     ("Ghar No 112B near school", "Ghar No 112B"),

@@ -73,7 +73,7 @@ def extract_facts(doc: Document, units, spans, meds, mention: Mention) -> Facts:
                 f.dx_spans.append((u.field, 0, len(text)))
         else:
             for m in _DX_LABEL.finditer(u.norm.text):
-                # the WHOLE first entry, ICD code included ("Anaemia, unspecified (D64.9)"): suppressing a fragment
+                # the WHOLE first entry, ICD code included ("Gout, unspecified (M10.9)"): suppressing a fragment
                 # left the code, which names the disease, in the clear
                 a0 = m.end()
                 b0 = dx_entry_end(u.norm.text, a0)

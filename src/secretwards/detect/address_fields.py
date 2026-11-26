@@ -47,7 +47,7 @@ _STOP = re.compile(
     r"तहसील|जिला|पोस्ट|थाना|पिन|ब्लॉक)\b|\s[\p{L}\p{M}.]+\s*:", re.I)
 _MAX_VALUE = 48
 
-# house numbers written with a Hindi / Hinglish marker and no colon: "Makan No. 41", "मकान नं. 41", "Ghar No 7/2"
+# house numbers written with a Hindi / Hinglish marker and no colon: "Makan No. 67", "मकान नं. 67", "Ghar No 7/2"
 _HOUSE_MARK = re.compile(
     r"(?<![\p{L}\p{M}])(?:makaa?n|ghar|मकान|घर)\s*(?:no\.?|number|nambar|sankhya|नं\.?|नंबर|संख्या|सं\.?)\s*[:\-#.]?\s*"
     r"[A-Za-z]?\d{1,5}(?:\s*[/\-]\s*[A-Za-z0-9]{1,4})?[A-Za-z]?(?![\d])", re.I)
