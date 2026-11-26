@@ -156,10 +156,20 @@ def take_run(text: str, toks: list[Tok], i: int, strong: bool, max_n: int = 4) -
             break
     j = i
     have = False
+    after_comma = False
     while j < n and j - i < max_n:
-        if j > i and not _gap_ok(text, toks[j - 1], toks[j], comma=strong and j - i == 1 and _is_cap(toks[j - 1].t)
-                                 and _is_cap(toks[j].t) and not L.is_common(toks[j].t)):
+        # "Surname, Given [Middle | Initial]": the comma is a token of its own. In a name context (a label or a name column) a one- or
+        # two-word capitalised surname, a comma and a capitalised, non-ordinary word continue the same name.
+        if (toks[j].t == "," and strong and j - i == 1 and have and j + 1 < n and not after_comma
+                and text[toks[j - 1].e:toks[j].s] == "" and text[toks[j].e:toks[j + 1].s] in ("", " ")
+                and _is_cap(toks[j - 1].t) and toks[j + 1].t[0].isalpha() and _is_cap(toks[j + 1].t)
+                and not L.is_common(toks[j + 1].t) and not _veto(toks[j + 1].t, False)):
+            j += 1
+            after_comma = True
+            continue
+        if j > i and not after_comma and not _gap_ok(text, toks[j - 1], toks[j]):
             break
+        after_comma = False
         if not _nameish(text, toks, j, strong, have):
             break
         have = True
