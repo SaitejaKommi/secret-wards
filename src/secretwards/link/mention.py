@@ -82,6 +82,13 @@ def build_mention(doc: Document, units, spans, meds) -> Mention:
                 ins.append(re.sub(r"[^A-Za-z0-9]", "", raw).upper())
             elif t == PIIType.MRN:
                 mrn.append(re.sub(r"[^A-Za-z0-9]", "", raw).upper())
+            elif t == PIIType.ID:
+                digits = "".join(c for c in ocr_digit_view(normalize(raw).text) if c.isdigit())
+                alnum = re.sub(r"[^A-Za-z0-9]", "", raw).upper()
+                if len(digits) == 12 and len(alnum) == 12:
+                    mrn.append("AADHAAR" + digits)  # a national id belongs to one person
+                elif re.fullmatch(r"[A-Z]{5}\d{4}[A-Z]", alnum):
+                    mrn.append("PAN" + alnum)
             elif t == PIIType.PINCODE:
                 d = "".join(c for c in ocr_digit_view(normalize(raw).text) if c.isdigit())
                 if len(d) == 6:

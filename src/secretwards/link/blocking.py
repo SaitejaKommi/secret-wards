@@ -23,7 +23,7 @@ def block_keys(m: Mention) -> list[str]:
     for i in m.insurance:
         keys.append("i:" + i)
     for r in m.mrn:
-        keys.append(f"m:{m.hospital}:{r}")
+        keys.append(f"m:{r}")
     nks = sorted({t.key for t in _tok(m.name_tokens) if not t.initial and not t.common and t.key})
     if m.dob:
         keys += [f"d:{m.dob}:{k}" for k in nks] or [f"d:{m.dob}"]
