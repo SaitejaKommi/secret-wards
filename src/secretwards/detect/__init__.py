@@ -9,6 +9,7 @@ from ..contracts import Detector, MedKind, MedSpan, PIIType, Span, Unit
 from . import lexicon as L
 from .address import AddressDetector
 from .address_fields import AddressFieldDetector
+from .hidden import HiddenDetector
 from .india_ids import IndiaIdDetector
 from .medical_guard import find_medical
 from .merge import merge
@@ -19,7 +20,7 @@ from ..normalize.translit import skeleton
 
 def default_detectors() -> list[Detector]:
     """Teammates: append a CRF detector here (it must implement contracts.Detector)."""
-    return [RuleDetector(), AddressDetector(), NameDetector(), IndiaIdDetector(), AddressFieldDetector()]
+    return [RuleDetector(), AddressDetector(), NameDetector(), IndiaIdDetector(), AddressFieldDetector(), HiddenDetector()]
 
 
 def detect_unit(unit: Unit, detectors: Sequence[Detector]) -> tuple[list[Span], list[MedSpan]]:
