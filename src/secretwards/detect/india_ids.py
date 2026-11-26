@@ -52,10 +52,24 @@ _NOT_ID_LABEL = re.compile(
     r"mobile|\bmob\b|phone|\bph\b|contact|\btel\b|\bcell\b|whats|\bfone\b|मोबाइल|फोन|फ़ोन|\bbed\b|ward|room|floor|"
     r"\bage\b|batch|\blot\b|\btab\b|dose|\bbp\b|pulse|वार्ड|बेड|आयु|\bpin\b|\bzip\b|पिन|house|h\.?no|flat|plot|makan|मकान|"
     r"aadh|adha|आधार|\buid|\bpan\b|पैन|abha|policy|claim|\bbill\b|invoice|package|amount|token", re.I)
+# MRN feeds same-hospital linking, so only PATIENT-id cues may produce it. Numbers that repeat on every document of a
+# doctor or facility (council "Reg. No.", hospital registration, drug licence, GSTIN, NABH) would merge every patient.
+_PATIENT_ID_LABEL = re.compile(
+    r"uhid|mrn|\bcrn?\b|\bipd?\b|\bopd?\b|\badm|admission|indoor|outdoor|\bcase\b|bed\s*head|patient|\bpt\b|\breg|"
+    r"panjikaran|panjiyan|पंजीकरण|पंजीयन|भर्ती|आईपीडी|ओपीडी|मरीज", re.I)
+_FACILITY_CTX = re.compile(
+    r"\bdr\b|doctor|mbbs|\bmd\b|\bms\b|\bdnb\b|council|\bregd\b|licen[cs]e|\blic\b|gst|nabh|nabl|\bcea\b|d\.\s*l\.|"
+    r"drug|pharmacy|clinic\s*reg|hospital\s*reg|डॉ|चिकित्सक|पंजीकृत|लाइसेंस", re.I)
 _UNIT_AFTER = re.compile(r"\s*(?:mg|mcg|ml|g\b|gm|kg|iu|%|/min|bpm|mmhg|/cumm|/ul|/dl|mmol|meq|units?\b|x\s*\d)", re.I)
 _DATE_GROUPS = re.compile(r"^[-/](?:0?[1-9]|[12]\d|3[01])[-/](?:0?[1-9]|1[0-2])[-/](?:\d{2}|\d{4})$|"
                           r"^[-/](?:0?[1-9]|1[0-2])[-/](?:0?[1-9]|[12]\d|3[01])[-/](?:\d{2}|\d{4})$|"
                           r"^[-/](?:19|20)\d{2}[-/](?:0?[1-9]|1[0-2])[-/](?:0?[1-9]|[12]\d|3[01])$")
+
+
+def _line(text: str, a: int, b: int) -> str:
+    ls = text.rfind("\n", 0, a) + 1
+    le = text.find("\n", b)
+    return text[ls: le if le >= 0 else len(text)]
 
 
 def _before(text: str, pos: int, n: int = 40) -> str:
@@ -106,7 +120,8 @@ class IndiaIdDetector:
                 continue
             if _UNIT_AFTER.match(text, m.end()):
                 continue
-            col.add(m.start(), m.end(), PIIType.MRN, 0.9)
+            typ = PIIType.ID if _FACILITY_CTX.search(_line(text, m.start(), m.end())) else PIIType.MRN
+            col.add(m.start(), m.end(), typ, 0.9)
 
         # hospital record numbers by label ("IPD No: 2026/123", "पंजीकरण सं.: 45231")
         for m in _ID_LABEL.finditer(view):
@@ -122,7 +137,8 @@ class IndiaIdDetector:
             a, b = m.start(2), m.start(2) + len(tok)
             if any(sp.type == PIIType.ID and sp.start < b and a < sp.end for sp in col.spans):
                 continue  # already an Aadhaar / PAN: a shorter MRN would win the merge and drop it
-            col.add(m.start(2), m.start(2) + len(tok), PIIType.MRN, 0.9)
+            patient = _PATIENT_ID_LABEL.search(label) and not _FACILITY_CTX.search(_line(view, a, b))
+            col.add(a, b, PIIType.MRN if patient else PIIType.ID, 0.9)
 
         # whole-cell rules for columns whose meaning is an identifier we know
         stripped = text.strip()

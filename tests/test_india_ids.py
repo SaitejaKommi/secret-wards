@@ -145,3 +145,34 @@ def test_date_after_prefix_is_not_an_mrn():
 def test_deterministic():
     text = "Aadhaar 2468 1357 9024, PAN ABCPK1234Q, IPD-2025-01234"
     assert spans(text) == spans(text)
+
+
+# ---------------- MRN feeds linking: doctor / facility numbers must never be typed MRN
+_NON_PATIENT = [
+    ("Dr. A. Verma, MBBS, Reg. No. 45678", "45678"),
+    ("Regd. No: XY/CEA/2019/1234", "XY/CEA/2019/1234"),
+    ("Drug Lic. No: 20B-55123", "55123"),
+    ("Hospital Reg No: HR-2011-00456", "HR-2011-00456"),
+    ("Ref. Number: 7712045", "7712045"),
+]
+
+
+@pytest.mark.parametrize("text,value", _NON_PATIENT)
+def test_non_patient_numbers_redacted_but_not_mrn(text, value):
+    from secretwards.detect.india_ids import IndiaIdDetector
+    u = make_unit("d", None, text)
+    assert not [s for s in IndiaIdDetector().detect(u) if s.type == PIIType.MRN]
+    assert covered(text, value)
+
+
+# Pre-existing in the lead's detect/rules.py (_MRN_CUE types any "Reg No" as MRN). strict xfail: remove once fixed there.
+@pytest.mark.xfail(strict=True, reason="detect/rules.py _MRN_CUE types doctor / hospital Reg No as MRN")
+@pytest.mark.parametrize("text,value", [_NON_PATIENT[0], _NON_PATIENT[3]])
+def test_known_rules_py_mrn_on_facility_numbers(text, value):
+    assert not [v for t, v in spans(text) if t == PIIType.MRN]
+
+
+@pytest.mark.parametrize("text,value", [("UHID: 5520117", "5520117"), ("IPD No: 2025/00412", "2025/00412"),
+                                        ("पंजीकरण सं.: 4471203", "4471203"), ("Patient ID - KP-88213", "KP-88213")])
+def test_patient_numbers_are_mrn(text, value):
+    assert (PIIType.MRN, value) in spans(text)
