@@ -18,7 +18,7 @@ src/secretwards/
   link/               names.py, mention.py, compare.py, blocking.py, cluster.py
   privacy/            pseudonym.py, render.py, generalize.py, risk.py
   export/             csv_json.py (CSV / JSON / TXT writers, header sanitiser)
-  security/           keys.py, vault.py (AES-GCM, not yet wired), safe_log.py, leak_gate.py
+  security/           keys.py, safe_log.py, leak_gate.py (there is no encryption module: the contract run writes no raw or intermediate data)
   pipeline.py         orchestration only
   cli.py              run | keygen
 synth/                generator with gold labels: dev, heldout, blind

@@ -3,10 +3,11 @@
 Offline, LLM-free de-identification and record linkage for messy English / Hindi / Hinglish hospital records (DevForge Track 3).
 No network, CPU only, deterministic, synthetic data only.
 
-**Status: working end to end on the organisers' contract; not finished.** `python main.py --input IN --output OUT` (with `RAKSHA_SECRET` set)
-writes `sanitized/`, `records.jsonl` and `report.json`, and the kit's `validate_output.py` prints CONTRACT OK. On the kit's practice data the
-kit's own self-check reports 0 of 3,230 personal values still visible, 0 canaries, 99.2% of medical values kept, linking precision 1.00 /
-recall 0.91. We tuned against that practice data, so treat those numbers as an upper bound; see "Known problems".
+**Status: working end to end on the organisers' contract, also on Linux; not finished.** `python main.py --input IN --output OUT` (with
+`RAKSHA_SECRET` set) writes `sanitized/`, `records.jsonl` and `report.json`. The kit's `check_submission.py --run` prints READY TO SUBMIT in a
+Python 3.12 container with 2 CPUs, 4 GB and no network. On the kit's practice data its own self-check reports 0 of 3,230 personal values still
+visible, 0 canaries, 99.6% of medical values kept, linking precision 1.00 / recall 0.91; our stand-in for the organisers' attacker re-identifies
+4 of 48 patients (47 of 48 on the raw data). We tuned against that practice data, so treat those numbers as an upper bound; see "Known problems".
 Team docs (status, metrics, task lists, the official kit analysis) are in the [`docs/`](docs) folder: start with
 [`docs/TOOLKIT.md`](docs/TOOLKIT.md), then [`docs/FRIEND_TASKS.md`](docs/FRIEND_TASKS.md) and [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
@@ -69,16 +70,18 @@ and why, counts, timing, memory; written last). A file we cannot process safely 
 The older development run (`python -m secretwards run`) writes a different layout (`deidentified/`, `manifest.json`).
 
 ## Measured status
-**Official practice data** (200 files, `RAKSHA_SECRET=practice`, the kit's `check_dev.py`; 2026-11-26, after PR #13):
+**Official practice data** (200 files, `RAKSHA_SECRET=practice`, the kit's `check_dev.py`; 2026-11-26):
 
 | Measure | Value |
 |---|---|
 | personal values still visible | 0 of 3,230 (Latin 0.0%, Devanagari 0.0%, Hinglish 0.0%; file names, metadata, base64, keys, headers all 0.0%) |
 | planted canaries found | 0 of 4 |
-| medical values kept | 4,816 of 4,855 (99.2%) |
-| patient linking | precision 1.00, recall 0.91, F0.5 0.98, 0 wrong merges |
-| FHIR (our own structural check) | 351 of 351 ids valid, 9 of 9 attachments valid base64, 459 of 459 references resolve |
-| time / peak memory | 5.2 s / about 64 MB (limits: 15 min, 4 GB) |
+| medical values kept | 4,835 of 4,855 (99.6%) |
+| patient linking | precision 1.00, recall 0.91, F0.5 0.98, 0 wrong merges (own reproduction of the kit's identity formula: B-cubed F1 0.96, language trap 0.87, fragmented trap 0.83, homonyms 2 of 2 kept apart) |
+| FHIR | 19 of 19 bundles pass our structural validator (ids, value sets, dates, base64, every reference resolves); the organisers' validator is hidden |
+| stand-in attacker (our implementation of the kit's A2-A5, `privacy/attack.py`) | patients re-identified by profile linking 4 of 48 (raw data 47 of 48); registry-linkage risk 0.04 (raw 0.71); targeted attack 0.61 (raw 0.93); 0 of 48 pseudonyms inverted; 0 records keep a pseudonym under another secret |
+| time / peak memory | 5.3 s / 55 MB on Linux with 2 CPUs (limits: 15 min, 4 GB); about 150 records per second, single process |
+| Linux | `check_submission.py --run` READY TO SUBMIT (python:3.12, `--cpus 2 --memory 4g --network none`); output byte-identical to the Windows output for the same secret |
 
 **Synthetic sets we generate ourselves** (older, 2026-11-26; fresh seeds, never tuned on the held-out and blind pools):
 
@@ -89,35 +92,49 @@ The older development run (`python -m secretwards run`) writes a different layou
 | blind names/templates/schemas | 0.995 | 0.977 | 0.992 | 0.996 | 0.597 | 0/23 |
 
 `check_dev.py` is a rough guide, not the official score: it does not run the organisers' attacker (a quarter of the score), does not check date
-and age-band truthfulness, and does not validate FHIR. The synthetic numbers do not predict the hidden set.
+and age-band truthfulness, and does not validate FHIR. Our attacker is a stand-in calibrated on the raw practice data (A4 47 of 48 against the kit's
+99.3%, A5 0.93 against 0.971); it has no registry, so it was never part of `main.py`. The synthetic numbers do not predict the hidden set.
 
 ## Security design (assume the server is breached one day)
-- **Nothing sensitive is written to disk by the contract run.** Input is opened read-only; the only files written are the redacted outputs.
-  There is no raw or intermediate copy, no temp file, no log file, so there is nothing to encrypt at rest. (An encrypted vault exists in
-  `security/` for the older run; the contract run does not use it.) A test runs `main.py` with a private TMPDIR and HOME and checks both stay empty.
-- **Keys.** The only secret is `RAKSHA_SECRET`, read from the environment. Pseudonyms, date shifts, file-name replacements and UUID aliases are
-  derived from it with keyed hashes (HMAC-SHA256, one label per purpose), so a breached output cannot be inverted or linked to another release
-  without the secret; a different secret gives different pseudonyms and shifts. The secret is never written anywhere (tested).
+**What protects data at rest.** Nothing sensitive is stored by the contract run, so there is nothing to encrypt:
+- The input is opened read-only. The only files written are the redacted outputs. No raw copy, intermediate file, temp file or log is written to disk;
+  records live in process memory for the run only. A test runs `main.py` with a private TMPDIR and HOME and checks both stay empty.
+- The released `sanitized/` tree holds no direct identifiers and is not encrypted, because it is meant to be shared. Its protection is the
+  de-identification itself: keyed pseudonyms, per-patient date shifts, generalized quasi-identifiers, measured with the stand-in attacker above.
+- We do **not** encrypt or manage the raw input; where it lives and how its disk is protected is the operator's job. We cannot control whether the host
+  swaps process memory to disk. There is no encryption code in this repository (an earlier unused AES-GCM stub was removed rather than shipped as a claim).
+- If the machine is breached after a run, the attacker gets the redacted release, the code, and no keys: the only secret is `RAKSHA_SECRET`, supplied
+  in the environment and never written anywhere (tested). Without it the pseudonyms cannot be inverted or linked to another release; anyone who holds
+  the secret and the original data can recompute every pseudonym.
+
+**Other controls.**
+- **Key separation.** Pseudonyms, date shifts and file-name / UUID aliases use three sub-keys derived from the secret with HMAC-SHA256, one label per
+  purpose (a different secret gives unrelated keys, pseudonyms and shifts; checked: 0 records keep a pseudonym). Keys are not held next to data.
 - **PII-free logging.** stdout is one line of counts; failures print only an exception type; the report holds hashes, counts and reason codes.
   A subprocess test plants invented canaries in contents, file names, JSON keys, headers and broken files and scans all seven side channels the
   kit lists (report, records, logs, other files, file names, stdout/stderr, TMPDIR/HOME).
 - **Quarantine, fail closed.** A file that cannot be parsed or decoded safely is quarantined whole (reason code only, no content), never copied raw;
   a failure removes partial output and exits non-zero (no false success).
 - **Last line of defence.** Every rendered field is re-scanned against the raw values found in the run (names, phones, ids, e-mails, ABHA); a field
-  that still leaks is blanked, never dropped.
-- **Not done:** an audit trail, encryption of the released `sanitized/` tree (it is meant to be shared), key rotation. Anyone who holds the secret
-  and the original data can recompute every pseudonym.
+  that still leaks is blanked, never dropped. Hospital and doctor names inside FHIR leaves are exempt from the name check; phones and ids are not.
+- **Not done:** an audit trail (the run keeps no record of its own beyond `report.json`) and key rotation.
 
 ## Known problems (open)
-- **Tuned on the practice data.** We used its answer key to find and fix bugs, so its numbers are optimistic. Hand probes with invented values still
-  leak: an unseen lowercase or Devanagari name with no cue, phones written "9 8 7 6 5 ..." or "(98765) 01240", "policy no X" without a colon.
-- **FHIR.** The Bundle is sanitized generically, not resource by resource: hospital names inside bundles are lost (19 of 19 in the practice data),
-  and a patient name outside the gazetteer under `name.family` / `name.given` survives (recorded as an expected-failure test).
-- **Privacy attacks are not measured.** There is no stand-in for the organisers' attacker. Linking more records per pseudonym gives an attacker that
-  joins records by pseudonym more evidence to combine, but generalization is decided per record. Age bands may be coarser than needed.
+- **Tuned on the practice data.** We used its answer key to find and fix bugs, so its numbers are optimistic. A stress test with invented formats
+  and layouts found more problems than the practice data did. Hand probes with invented values still leak: an unseen lowercase or Devanagari name with
+  no cue, phones written "9 8 7 6 5 ..." or "(98765) 01240", "policy no X" without a colon, a phone written as a hex string.
+- **Privacy versus utility.** The stand-in attacker re-identified 40 of 48 patients before per-patient generalization and 4 of 48 after. The price: with
+  a "5 patients per group" rule inside a 48-patient release most patients land in coarse age groups (18-59, 60-89), which our proxy of the kit's
+  generalization score puts at 0.28 for age (0.54 before). Uniform 10-year bands would leave 19 of 48 re-identified, 5-year bands 28 of 48.
+  Counting the group size against the population an attacker searches (4-5 times the patients) would keep finer bands for most patients; not done.
+  An age stored as a JSON number cannot hold a band, so the writer emits a keyed surrogate number, which is not truthful for the age-band score.
+- **FHIR.** Bundles are handled resource by resource (hospital and doctor names kept; patient and relative names, phones, ids, addresses removed). The
+  organisers' validator is hidden, so unusual resource types or elements may still fail it.
 - **Linking stops short on purpose.** 33 of 771 required records are not linked: lab records carrying only a shared phone and a relative's name,
   and notes with no identifier. Linking them would merge different people. Same-name patients who share a father's name and birth year can still merge.
-- **Platform.** All numbers come from Windows; the evaluator runs Linux. A static check found nothing Windows-only, but we have not run it on Linux.
+- **Speed and memory.** One process, about 150 records (or 0.1 MB of text) per second and about 26 KB of memory per record: roughly 120,000 records fit in
+  15 minutes and 150,000 in 4 GB. The practice set (817 records) takes 5 s; a very large bulk export would not fit.
+- A label such as `Patient:` can absorb up to four following words ("Patient: Rao seen today"), which over-redacts a little.
 - The legacy development run can leave partial output after a failure; the contract run removes it.
 
 ## Rules this repo follows

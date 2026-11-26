@@ -64,8 +64,7 @@ Leaked: unseen lowercase name without cue; unseen Devanagari name without cue; p
 Removed correctly: Title Case unseen names, names after Mr / bed-list / kin terms, 8 other phone formats, e-mails incl. "at/dot", unusual dates, villages and society addresses, ABHA and short reg numbers.
 
 ## What is NOT done
-FHIR-aware sanitizing (the kit needs valid FHIR in place, not an export; hospital names in bundles are still lost); encryption at rest (key and vault exist, unused; the pipeline writes no raw or intermediate data to disk, only redacted outputs); audit trail; access separation;
-technical report; CRF; stronger attack. Exact ages kept for only 13-42% of records (diagnosis spelling variants fragment the privacy groups).
+An audit trail and key rotation. Encryption at rest does not apply to the contract run (it writes no raw or intermediate data; the unused AES-GCM vault and the `cryptography` dependency were removed, see README "Security design"). The FHIR sanitizer is resource-aware (PR #15) but the organisers' validator is hidden. Age bands are mostly coarse by design (PR #18 trade-off: 4 of 48 re-identified, age utility 0.28). Throughput is about 150 records/s on one process. CRF. Exact ages are kept for few records.
 
 ## History of bad numbers (kept on purpose)
 - First M2 slice, held-out names: name recall 0.877, name leak 10.2%, 2 canary leaks.
