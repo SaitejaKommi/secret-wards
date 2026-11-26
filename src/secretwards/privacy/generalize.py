@@ -14,9 +14,13 @@ Policy (privacy-vs-utility, in this order: give up location precision first, age
         level 5  10-year band,         PIN removed, rare diagnosis suppressed
         level 6  coarse age groups (<18, 18-59, 60+), PIN removed, rare diagnosis suppressed
      From level 3 on (the age is a band) a date of birth becomes a birth-year band of the same width class
-     ("1975-1979"; a FHIR birthDate, which must stay a valid date, becomes the band's first year) and a tehsil
-     becomes "[TEHSIL]" (the district stays). A day-shifted DOB still states the birth year, which would undo the
-     age band, and tehsil + district + sex + age narrow a voter registry to one person.
+     ("1975-1979"; a FHIR birthDate, which must stay a valid date, becomes the band's first year), and tehsil and
+     district become "[TEHSIL]" / "[DISTRICT]". Hiding the district costs one place field but lets the age stay a
+     5-year band: with the district kept, only coarse groups ("18-59") stop a register attack (measured).
+     A day-shifted DOB still states the birth year, which would undo the age band, and tehsil + district + sex + age
+     narrow a voter registry to one person.
+     k is counted with the attacker's register in mind (POPULATION_FACTOR), but a combination that is unique in the
+     release is always generalized.
   3. Ages >= age_top_code are always reported as "N+" (a tiny group is identifying by itself).
 Street-level address, names, phones and ids are removed everywhere, regardless of level.
 Medical values (vitals, labs, drugs, doses, length of stay) are never touched.
@@ -36,6 +40,10 @@ from ..detect.headers import hint_for
 from ..normalize.text import normalize
 
 MAX_LEVEL = 6
+# The attacker searches a population register, not the release: ATTACKS.md puts it at 4-5x the patient count. A class
+# of n patients in the release therefore leaves about POPULATION_FACTOR * n people for the attacker to choose from.
+# Counting k inside a small release alone pushed almost everyone to the coarsest age groups (measured: "18-59").
+POPULATION_FACTOR = 4
 _DX_LABEL = re.compile(
     r"(?:principal\s+diagnosis|final\s+diagnosis|diagnosis|dx|निदान|bimari|rog|रोग|शिकायत/निदान)\s*[:\-]\s*(?=[^\s;|])", re.I)
 _DX_HEADER = re.compile(r"diagnos|\bdx\b|निदान|bimari|\brog\b|रोग|disease|illness", re.I)
@@ -70,6 +78,7 @@ class Facts:
     tehsil: Optional[str] = None
     dob_spans: list = field(default_factory=list)  # (field, start, end, is_fhir_date)
     tehsil_spans: list = field(default_factory=list)  # (field, start, end)
+    district_spans: list = field(default_factory=list)  # (field, start, end)
 
 
 def extract_facts(doc: Document, units, spans, meds, mention: Mention) -> Facts:
@@ -154,7 +163,10 @@ def _place_and_dob(f: Facts, u, hint, uspans) -> None:
             f.tehsil_spans.append((u.field, a, a + len(stripped)))
         return
     if u.field is not None and stripped and _DISTRICT_HDR.search(u.header):
-        f.district = f.district or _low(stripped)
+        a = text.index(stripped[0])
+        if not covered(a, a + len(stripped)):
+            f.district = f.district or _low(stripped)
+            f.district_spans.append((u.field, a, a + len(stripped)))
         return
     for m in _TEHSIL_TEXT.finditer(text):
         g = 1 if m.group(1) else 2
@@ -163,13 +175,13 @@ def _place_and_dob(f: Facts, u, hint, uspans) -> None:
         if val.strip() and not covered(a, b):
             f.tehsil = f.tehsil or _low(val)
             f.tehsil_spans.append((u.field, a, b))
-    if f.district is None:
-        for m in _DISTRICT_TEXT.finditer(text):
-            g = 1 if m.group(1) else 2
-            val = _STOP_WORDS.sub("", m.group(g))
-            if val.strip() and not covered(m.start(g), m.start(g) + len(val)):
-                f.district = _low(val)
-                break
+    for m in _DISTRICT_TEXT.finditer(text):
+        g = 1 if m.group(1) else 2
+        val = _STOP_WORDS.sub("", m.group(g))
+        a, b = m.start(g), m.start(g) + len(val)
+        if val.strip() and not covered(a, b):
+            f.district = f.district or _low(val)
+            f.district_spans.append((u.field, a, b))
 
 
 def _by_width(level: int) -> int:
@@ -216,7 +228,8 @@ def qi_key(f: Facts, level: int, cfg: Config, rare: frozenset = frozenset()) -> 
     if f.birth_year is not None:
         by = f.birth_year if level <= 2 else dob_text(f.birth_year, level, False)
     tehsil = f.tehsil if level <= 2 else None
-    return (age, f.sex, pin, dx, by, f.district, tehsil)
+    district = f.district if level <= 2 else None
+    return (age, f.sex, pin, dx, by, district, tehsil)
 
 
 def _pooled(docs: list[str], facts: dict[str, Facts]) -> Facts:
@@ -235,7 +248,14 @@ def plan_levels(facts: dict[str, Facts], pseud_of: dict[str, str], cfg: Config) 
     patients, and use that level in every one of their records: a record-by-record level let the most precise record
     of a patient decide what an attacker pooling the records sees.
     Returns (level per doc_id, set of doc_ids whose diagnosis is suppressed, rare diagnoses)."""
-    k = cfg.k_target
+    # patients needed in a release class: k people in the register is about k / POPULATION_FACTOR patients, but never
+    # fewer than 2 (a combination unique in the release may well be unique in the register too)
+    need = max(2, -(-cfg.k_target // POPULATION_FACTOR))
+    # The diagnosis is not part of the class check: a register attacker cannot use it, and with it every class of a
+    # small release was a singleton, which drove almost all ages to "18-59" (measured: 264 -> 43 coarse ages without
+    # it). Rare diagnoses are still handled by suppression below. cfg.qi_include_dx keeps its meaning for risk.py.
+    from dataclasses import replace
+    kcfg = replace(cfg, qi_include_dx=False)
     docs_of: dict[str, list[str]] = defaultdict(list)
     for d in sorted(facts):
         docs_of[pseud_of[d]].append(d)
@@ -251,10 +271,10 @@ def plan_levels(facts: dict[str, Facts], pseud_of: dict[str, str], cfg: Config) 
     for _ in range(MAX_LEVEL + 1):
         classes: dict[tuple, set[str]] = defaultdict(set)
         for p, f in pooled.items():
-            classes[qi_key(f, plevel[p], cfg, rare_dx)].add(p)
+            classes[qi_key(f, plevel[p], kcfg, rare_dx)].add(p)
         changed = False
         for p in sorted(active):
-            if plevel[p] < MAX_LEVEL and len(classes[qi_key(pooled[p], plevel[p], cfg, rare_dx)]) < k:
+            if plevel[p] < MAX_LEVEL and len(classes[qi_key(pooled[p], plevel[p], kcfg, rare_dx)]) < need:
                 nxt = plevel[p] + 1
                 if nxt == 5 and pooled[p].dx not in rare_dx:
                     nxt = 6  # suppressing a common diagnosis would not help; coarsen the age instead
@@ -287,6 +307,8 @@ def overrides(f: Facts, texts: dict, level: int, suppress_dx: bool, cfg: Config)
                     out[fld].append((a, b, new))
         for fld, a, b in f.tehsil_spans:
             out[fld].append((a, b, "[TEHSIL]"))
+        for fld, a, b in f.district_spans:
+            out[fld].append((a, b, "[DISTRICT]"))
     return out
 
 

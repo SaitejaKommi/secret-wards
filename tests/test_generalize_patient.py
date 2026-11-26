@@ -62,13 +62,14 @@ def test_tehsil_column_and_label():
     assert g.tehsil == "bhaironpur" and g.district == "fatehganj"
 
 
-def test_overrides_band_the_dob_and_hide_tehsil_at_level_3():
+def test_overrides_band_the_dob_and_hide_tehsil_and_district_at_level_3():
     text = "DOB: 14/06/1943, Tehsil Bhaironpur, Distt. Fatehganj"
     f, u, spans = _facts_for(text)
     ov = overrides(f, {None: text}, 3, False, Config())
     out = redact(text, spans[None], 40, ov[None])
     assert "1940-1944" in out and "14/06/1943" not in out
-    assert "[TEHSIL]" in out and "Bhaironpur" not in out and "Fatehganj" in out
+    assert "[TEHSIL]" in out and "Bhaironpur" not in out
+    assert "[DISTRICT]" in out and "Fatehganj" not in out   # with the district hidden the age can stay a 5-year band
 
 
 def test_low_level_keeps_the_shifted_date():
@@ -85,3 +86,27 @@ def test_age_from_the_record_when_the_linker_found_none():
     u = make_unit("d", "age", text)
     f = extract_facts(doc, [u], {"age": []}, {"age": []}, Mention("d", "h"))
     assert f.age == 48 and f.age_spans
+
+
+def test_diagnosis_does_not_split_classes():
+    cfg = Config()   # k=5 with the register factor: 2 patients per release class are enough
+    facts, pseud = {}, {}
+    for i, dx in enumerate(["G43.9", "M10.9"]):        # same age band / sex, different diagnoses
+        facts[f"d{i}"] = Facts(f"d{i}", age=40 + i, sex="F", dx=dx)
+        pseud[f"d{i}"] = f"P{i}"
+    levels, _sup, _rare = plan_levels(facts, pseud, cfg)
+    assert levels["d0"] == levels["d1"] == 3            # a 5-year band, not the coarse "18-59" group
+
+
+def test_a_unique_combination_is_always_generalized():
+    cfg = Config()
+    cfg.k_target = 1                                    # even when k alone would accept it
+    facts = {"u": Facts("u", age=71, sex="M", district="fatehganj")}
+    levels, _sup, _rare = plan_levels(facts, {"u": "U"}, cfg)
+    assert levels["u"] > 0
+
+
+def test_district_hidden_only_once_the_age_is_banded():
+    cfg = Config()
+    f = Facts("d", age=47, sex="M", district="fatehganj")
+    assert "fatehganj" in qi_key(f, 2, cfg) and "fatehganj" not in qi_key(f, 3, cfg)
