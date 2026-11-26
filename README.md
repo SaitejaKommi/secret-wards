@@ -5,8 +5,8 @@ No network, CPU only, deterministic, synthetic data only.
 
 **Status: working core, not finished.** Detection, linkage, privacy layer and leak gate work end to end on synthetic data.
 Missing: FHIR R4 export, encryption at rest, audit trail, technical report. Several known bugs are listed below.
-Team docs (status, metrics, task lists) live on the `docs` branch: see `FRIEND_TASKS.md` and `PROGRESS.md` there
-(`git worktree add docs-wt docs`).
+Team docs (status, metrics, task lists, the official kit analysis) are in the [`docs/`](docs) folder: start with
+[`docs/TOOLKIT.md`](docs/TOOLKIT.md), then [`docs/FRIEND_TASKS.md`](docs/FRIEND_TASKS.md) and [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## What it does
 1. **Reads** CSV, TSV, JSON, JSONL, TXT, XLSX. Anything unreadable is quarantined (reason code only, no content).

@@ -3,14 +3,13 @@
 Offline, LLM-free de-identification and record linkage for messy English / Hindi / Hinglish hospital records.
 
 ## Read before any work
-Docs live on the `docs` branch, checked out as a git worktree at `docs-wt/`.
-1. `docs-wt/TOOLKIT.md` (READ FIRST: the official organiser kit, the exact output contract `raksha.toml` / `main.py` / `RAKSHA_SECRET` / `sanitized/` / `report.json` / `records.jsonl`, scoring, penalties, and every conflict with our code. Where it differs from older docs, the kit wins.)
-2. `docs-wt/PROBLEM_ORIGINAL.md` (original statement, never edit; superseded by `docs-wt/toolkit/docs/PROBLEM_STATEMENT.md` for contract questions)
-3. `docs-wt/PROBLEM_STATEMENT.md`
-4. `docs-wt/ARCHITECTURE.md`
-5. `docs-wt/PROGRESS.md` and `docs-wt/FRIEND_TASKS.md` (who owns which files, git workflow)
+Docs live in the `docs/` folder on `main` (to be deleted after the hackathon).
+1. `docs/TOOLKIT.md` (READ FIRST: the official organiser kit, the exact output contract `raksha.toml` / `main.py` / `RAKSHA_SECRET` / `sanitized/` / `report.json` / `records.jsonl`, scoring, penalties, and every conflict with our code. Where it differs from older docs, the kit wins.)
+2. `docs/PROBLEM_ORIGINAL.md` (original statement, never edit; superseded by `docs/toolkit/docs/PROBLEM_STATEMENT.md` for contract questions)
+3. `docs/PROBLEM_STATEMENT.md`
+4. `docs/ARCHITECTURE.md`
+5. `docs/PROGRESS.md` and `docs/FRIEND_TASKS.md` (who owns which files, git workflow)
 
-If `docs-wt/` is missing: `git worktree add docs-wt docs`
 The official kit itself is cloned NEXT TO this repo, never inside it: `git clone https://github.com/Reinforce-SST/Secret-Wards-ToolKit.git`
 
 ## Non-negotiables
@@ -24,8 +23,8 @@ The official kit itself is cloned NEXT TO this repo, never inside it: `git clone
 
 ## Working rules
 - Stages talk only through the types in `contracts.py`. Ask before changing them.
-- Small commits with honest messages. Never rewrite or fake history. Work on your own branch and open a pull request into `main` (see `docs-wt/FRIEND_TASKS.md`).
+- Small commits with honest messages. Never rewrite or fake history. Work on your own branch and open a pull request into `main` (see `docs/FRIEND_TASKS.md`).
 - Every detection or linkage change: run the scorer (and, once the contract adapter exists, the kit's `validate_output.py` and `check_dev.py`) and record the numbers.
-- After each milestone, update `docs-wt/PROGRESS.md` and commit it on `docs`.
+- After each milestone, update `docs/PROGRESS.md` and commit it (on your branch, via PR).
 - Explain new modules briefly so the team can answer judges' questions.
 - If a design choice is unclear or a bug survives two attempts, stop and ask. Suggest switching to Opus (`/model opus`).

@@ -2,7 +2,7 @@
 
 Track 3 of DevForge. Repo: https://github.com/SaitejaKommi/secret-wards. Lead: Saiteja Kommi. Friend A: detection and attack. Friend B: FHIR, security, report, brief.
 
-**STEP 0 for every person and every AI tool: read `docs-wt/TOOLKIT.md` before anything else.** The organisers released an official kit with a strict output contract
+**STEP 0 for every person and every AI tool: read `docs/TOOLKIT.md` before anything else.** The organisers released an official kit with a strict output contract
 (`raksha.toml`, `main.py`, `RAKSHA_SECRET`, `sanitized/`, `report.json`, `records.jsonl`). Our code does not meet it yet. TOOLKIT.md lists every conflict and the plan (P0-P7).
 Never hardcode names or values from the practice data or its answer key. Never commit the kit's `dev/` folder (practice data, truth, attacker).
 
@@ -43,7 +43,7 @@ python Secret-Wards-ToolKit/validate_output.py --input Secret-Wards-ToolKit/dev/
 python Secret-Wards-ToolKit/check_dev.py --output secret-wards/out/starter                                                # about 84% leaked: expected
 ```
 Once the lead merges P0, our own run is `RAKSHA_SECRET=practice python main.py --input ../Secret-Wards-ToolKit/dev/input --output out/ours` followed by the same two checkers.
-Docs worktree: `git worktree add docs-wt docs`. Always run on an input folder, never on the folder holding answer keys. Expected: `100 passed`.
+Docs are in the `docs/` folder on `main`. Always run on an input folder, never on the folder holding answer keys. Expected: `100 passed`.
 
 ## 3. Real status (measured 2026-11-26; details in TOOLKIT.md section 7)
 - Our synthetic data (own generator, does NOT predict the hidden set): PII recall 0.995-0.997, precision 0.977-0.996, medical kept 0.988-0.992, link precision 0.98-1.0, link recall 0.60-0.96, canaries 0/23.
@@ -56,7 +56,7 @@ Docs worktree: `git worktree add docs-wt docs`. Always run on an input folder, n
 - Never commit to `main` directly. Friend A: branch `feat/detection`. Friend B: branch `feat/output-security`. Lead: `feat/contract` for P0.
 - Commit from your OWN GitHub account (check `git config user.name` and `user.email` before the first commit; use your GitHub noreply email). Small commits, honest messages. Never rewrite or force-push shared history.
 - Before every PR: `python -m pytest -q` green; run the scorer on dev and blind; once P0 is merged also run the kit's `validate_output.py` and `check_dev.py`; paste the numbers in the PR text.
-- Update your rows in `docs-wt/PROGRESS.md` on the `docs` branch after each finished task (`cd docs-wt && git add -A && git commit && git push`).
+- Update your rows in `docs/PROGRESS.md` after each finished task (commit it on your own branch and include it in your PR).
 - NEVER commit: `keys/`, `*.key`, `data/`, `out/`, `.venv/`, caches, the kit's `dev/`, any answer key or attacker file, anything that holds `RAKSHA_SECRET`. `.gitignore` covers most of it; read `git status` before every commit.
 
 ### Pull request steps (copy these)
@@ -94,7 +94,7 @@ gh pr create --base main --head feat/detection --title "short title" --body "wha
 **Ready-to-paste prompt (Friend A):**
 ```
 You are helping on the Secret Wards repo (hackathon Track 3: offline, LLM-free de-identification and record linkage for English/Hindi/Hinglish hospital records).
-FIRST read CLAUDE.md, then docs-wt/TOOLKIT.md (the official kit and output contract), then docs-wt/FRIEND_TASKS.md section 5. I am Friend A (detection and attack). Work only on branch feat/detection.
+FIRST read CLAUDE.md, then docs/TOOLKIT.md (the official kit and output contract), then docs/FRIEND_TASKS.md section 5. I am Friend A (detection and attack). Work only on branch feat/detection.
 Rules: no LLMs or generative models, no model above 50M parameters, no network at run time, deterministic output, fake data only, never hardcode names or values from the practice data or its answer key,
 never commit keys/ data/ out/ .venv/ or the kit's dev/ folder, no PII or RAKSHA_SECRET in logs/tests/docs. Do not change contracts.py, pipeline.py, main.py, contract/, link/, export/, fhir/, security/,
 detect/rules.py, detect/merge.py, detect/names.py. Add new detector files (detect/india_ids.py, detect/address_fields.py, detect/hidden.py, detect/diagnosis.py) and register them only in detect/__init__.py.
@@ -106,7 +106,7 @@ Stop and ask if a design choice is unclear or a bug survives two attempts.
 
 ## 6. Friend B: FHIR-aware sanitizer, security, report, brief (plan steps P3, P6, P7)
 **Why:** the kit gives integrity 10 points (format, schema, FHIR validity, report honesty, channel hygiene) and every JSON/FHIR file must stay valid. Note the change: we need a FHIR-aware *sanitizer* that edits the input Bundle in place, not a new FHIR exporter.
-**Files you own:** new package `src/secretwards/fhir/` (`sanitize.py`, `validate.py`), `src/secretwards/security/vault.py`, `security/audit.py`, `security/safe_log.py`, tests `tests/test_fhir.py`, `tests/test_vault.py`, `tests/test_audit.py`, `tests/test_contract_hygiene.py`, `README.md` (setup/architecture/limitations parts), `docs/brief.pdf` plus its source `docs-wt/BRIEF.md`, `scripts/demo.*`, `.github/workflows/ci.yml` (Linux CI running pytest, the kit starter checks and our contract path).
+**Files you own:** new package `src/secretwards/fhir/` (`sanitize.py`, `validate.py`), `src/secretwards/security/vault.py`, `security/audit.py`, `security/safe_log.py`, tests `tests/test_fhir.py`, `tests/test_vault.py`, `tests/test_audit.py`, `tests/test_contract_hygiene.py`, `README.md` (setup/architecture/limitations parts), `docs/brief.pdf` plus its source `docs/BRIEF.md`, `scripts/demo.*`, `.github/workflows/ci.yml` (Linux CI running pytest, the kit starter checks and our contract path).
 **Files NOT to touch:** `contracts.py`, `pipeline.py`, `main.py`, `contract/*`, `detect/*`, `link/*`, `privacy/*`, `ingest/*`, `normalize/*`, `eval/*`.
 **Interface (agree with the lead before coding):** `fhir/sanitize.py` exposes `sanitize_bundle(bundle: dict, ctx) -> dict`, where `ctx.redact(text, field_hint) -> str`, `ctx.shift_date(value: str) -> str` (same syntax: date, dateTime, instant), `ctx.pseudonym(key) -> str` are supplied by the lead's contract writer. The function must keep resource ids and every `reference` resolvable inside the Bundle, keep value types and valid R4 syntax, clean `meta.source`, `identifier`, narrative `text.div`, extensions and base64 attachments, and never add or drop entries.
 **Steps in order:**
@@ -120,7 +120,7 @@ Stop and ask if a design choice is unclear or a bug survives two attempts.
 **Ready-to-paste prompt (Friend B):**
 ```
 You are helping on the Secret Wards repo (hackathon Track 3: offline, LLM-free de-identification and record linkage for English/Hindi/Hinglish hospital records).
-FIRST read CLAUDE.md, then docs-wt/TOOLKIT.md (the official kit and output contract), then docs-wt/FRIEND_TASKS.md section 6. I am Friend B (FHIR, security, report, brief). Work only on branch feat/output-security.
+FIRST read CLAUDE.md, then docs/TOOLKIT.md (the official kit and output contract), then docs/FRIEND_TASKS.md section 6. I am Friend B (FHIR, security, report, brief). Work only on branch feat/output-security.
 Rules: no LLMs, no network at run time, deterministic output, fake data only, never hardcode names or values from the practice data or its answer key, never commit keys/ data/ out/ .venv/ or the kit's dev/ folder,
 no PII or RAKSHA_SECRET in logs/tests/docs. Do not change contracts.py, pipeline.py, main.py, contract/, detect/, link/, privacy/, ingest/, normalize/, eval/.
 Do these in order, one small commit each: (1) fhir/sanitize.py + fhir/validate.py: sanitize a FHIR R4 Bundle IN PLACE (ids, references, meta.source, identifiers, narrative, attachments; shift dates in valid syntax through ctx.shift_date) per the interface in section 6;
@@ -143,7 +143,7 @@ Each step needs tests. Run python -m pytest -q after each step. Stop and ask if 
 | `detect/india_ids.py`, `detect/address_fields.py`, `detect/hidden.py`, `detect/diagnosis.py`, `detect/crf/*`, `privacy/*` | Friend A |
 | `fhir/*`, `security/vault.py`, `security/audit.py`, `security/safe_log.py`, CI workflow, README, brief | Friend B |
 | `synth/*`, `eval/*`, `tests/*` | each owner for their own new test files; lead for existing ones |
-| `docs-wt/*` | lead; everyone updates their own rows in PROGRESS.md |
+| `docs/*` | lead; everyone updates their own rows in PROGRESS.md |
 
 ## 9. Quick checks before you push
 `git status` shows only your files; `git diff --stat main` is small; `python -m pytest -q` is green; no key, data, out, kit `dev/`, answer key or personal path in the diff; the kit checkers do not get worse.

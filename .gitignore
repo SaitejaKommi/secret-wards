@@ -1,5 +1,4 @@
 # Anchored to the repo root on purpose: an unanchored "data/" also hid src/secretwards/detect/gazetteer/data/
-/docs-wt/
 /data/
 /out/
 /keys/

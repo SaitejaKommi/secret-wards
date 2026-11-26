@@ -1,6 +1,6 @@
 # Progress
 
-Newest log entry on top. Repo: https://github.com/SaitejaKommi/secret-wards (public). Branches: `main` (code), `docs` (this folder, worktree `docs-wt/`).
+Newest log entry on top. Repo: https://github.com/SaitejaKommi/secret-wards (public). Single branch `main`; these docs live in `docs/` (to be deleted after the hackathon).
 Team tasks and setup: see `FRIEND_TASKS.md`. Figures below were measured by running the code on synthetic data; they do not predict the hidden set.
 
 ## READ FIRST: official kit changes the target (2026-11-26)
@@ -61,6 +61,6 @@ technical report; CRF; stronger attack. Exact ages kept for only 13-42% of recor
 2. Real run: put `keys_dir` outside the project folder.
 
 ## Log
-**2026-11-26 audit + first commit.** Re-ran everything on fresh seeds, wrote adversarial probes, found the issues above; created the git repo, `docs` branch and this worktree; wrote `FRIEND_TASKS.md`; README matches reality.
+**2026-11-26 audit + first commit.** Re-ran everything on fresh seeds, wrote adversarial probes, found the issues above; created the git repo (docs later merged into `main` under `docs/`); wrote `FRIEND_TASKS.md`; README matches reality.
 **2026-11-26 M5 / M4 / M3 / M2 / M1 / M0.** See `ARCHITECTURE.md` for the design as built.
 **2026-11-26 toolkit.** Cloned the official kit next to the repo and read all of its docs and code before running anything. Ran the starter (CONTRACT OK, 84.1% leaked), our pipeline (no crash, wrong layout, 382 records quarantined by our own gate), `validate_output.py` (crashes on our report), `check_submission.py` static (raksha.toml missing), and `check_dev.py` through a measurement-only adapter (4.7% leaked, 77.8% medical kept, linking not measurable). Wrote `TOOLKIT.md`, copied the kit docs to `toolkit/` (no data/truth/attacker), re-split `FRIEND_TASKS.md` around the contract. No source code changed.
