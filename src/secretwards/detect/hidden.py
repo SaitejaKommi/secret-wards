@@ -25,6 +25,7 @@ import binascii
 import hashlib
 import hmac
 import html
+from functools import lru_cache
 from typing import Callable
 
 import regex as re
@@ -84,22 +85,36 @@ def _token_kind(tok: str) -> PIIType | None:
     return None
 
 
+def _views(stem: str) -> list[str]:
+    """Readings of a file / folder name for the name detectors: separators as spaces, hyphens as spaces, camelCase split."""
+    spaced = _SEP.sub(" ", stem)
+    v = [spaced, spaced.replace("-", " "), re.sub(r"(?<=\p{Ll})(?=\p{Lu})", " ", spaced.replace("-", " "))]
+    return list(dict.fromkeys(v))
+
+
+@lru_cache(maxsize=4096)
 def component_has_pii(stem: str) -> bool:
-    """A file / folder / path-segment name (without extension) holds PII?"""
+    """A file / folder / path-segment name (without extension) holds PII? Only identifying kinds count
+    (name, phone, email, ids): a city or district in a name like '<city>_branch_opd' is not a reason to rename."""
     if not stem or not any(c.isalpha() or c.isdigit() for c in stem):
         return False
-    if any(_token_kind(t) for t in _SEP.split(stem) if t):
+    dotted = re.sub(r"(?<=[A-Za-z0-9])\.(?=\d)", "-", stem)  # 'IPD.2025.00412' -> 'IPD-2025-00412'
+    if any(_token_kind(t) for x in (stem, dotted) for t in _SEP.split(x) if t):
         return True
-    spaced = _SEP.sub(lambda m: " " * len(m.group()), stem)  # same length: offsets stay valid
-    return bool(inner_spans(spaced, header=""))
+    return any(inner_spans(v, header="", types=frozenset(_LABEL_KINDS)) for v in _views(stem))
 
 
 def _tag(key: bytes, text: str, n: int = 10) -> str:
     return hmac.new(key, b"hidden-name\x00" + text.encode("utf-8"), hashlib.sha256).hexdigest()[:n]
 
 
+_DOUBLE_EXT = re.compile(r"\.(?:tar|json|csv|tsv|txt|xml|ndjson|jsonl)\.(?:gz|bz2|xz|zst|zip)$", re.I)
+_EXT = re.compile(r"\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,5}$")
+
+
 def _split_ext(name: str) -> tuple[str, str]:
-    m = re.search(r"(\.[A-Za-z0-9]{1,6})+$", name)
+    """Only the final suffix is an extension (plus known double ones like .json.gz): 'First.Last.txt' -> 'First.Last'."""
+    m = _DOUBLE_EXT.search(name) or _EXT.search(name)
     if not m or m.start() == 0:
         return name, ""
     return name[:m.start()], name[m.start():]
@@ -133,6 +148,10 @@ gaon gaanv gram mohalla tehsil tahsil jila zila zilla pata ghar makan sankhya kr
 mobile phone sampark aadhar aadhaar adhar rashi rakam bimari rog nidan dawa dawai jaanch janch report vibhag ward
 bed kamra chikitsak doctor dr sr serial visit visits ref refs record records type status code display value unit
 units meta source path system exported generated created updated time timestamp id ids index by map list
+pradhan mukhya nidan nidaan chikitsa chikitsak adhikari bhugtan sthiti sthithi kul rashi shulk upchar vibhag jaanch janch
+parinaam parinam sanstha dawa dawai aushadhi rog prakar vivaran samay din mahina varsh saal sankhya praman patra beema bima
+yojana kendra aspatal anubhag shreni varg kaksh bistar pravesh visarjan chhutti mulyankan tippani nirdesh matra khurak
+avadhi raktchap taapman vajan lambai jaati dharm vyavsay shiksha vaivahik pehchan pahchan sampark vivran sewa seva
 """.split())
 
 
@@ -143,6 +162,7 @@ def _schema_only(label: str) -> bool:
                                for w in words)
 
 
+@lru_cache(maxsize=4096)
 def label_has_pii(label: str) -> bool:
     """A JSON key or column header that is itself personal data (a name, a phone, a record number)."""
     if not label or not label.strip():
@@ -268,14 +288,21 @@ def fold_homoglyphs(text: str) -> str:
     return _MIXED_WORD.sub(lambda m: m.group().translate(_FOLD), text)
 
 
+_DATE_RUN = re.compile(r"(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?:\d{4,6})?|"
+                       r"(?:0[1-9]|[12]\d|3[01])(?:0[1-9]|1[0-2])(?:19|20)\d{2}")
+_EXPORT_WORDS = frozenset("""backup backups archive archives export exports import data final old new copy batch run job jobs report
+reports files file temp tmp snapshot dump sync upload uploads download downloads scan scans misc his emr hmis lis ris pacs
+daily weekly monthly yearly auto manual migrated migration legacy prod test""".split())
+
+
 def _person_folder(stem: str) -> bool:
     """A path segment like <Name>_<Initials>_<id>: a capitalised non-schema word next to a 5+ digit run.
     Used for metadata paths only (exports are often filed per patient); file names need stronger evidence."""
     from .lexicon import HEADER_WORDS
     toks = [t for t in _SEP.split(stem) if t]
-    has_id = any(sum(c.isdigit() for c in t) >= 5 for t in toks)
+    has_id = any(sum(c.isdigit() for c in t) >= 5 and not _DATE_RUN.fullmatch(t) for t in toks)
     has_cap = any(t[:1].isupper() and t.isalpha() and t.lower() not in HEADER_WORDS and t.lower() not in _SCHEMA_WORDS
-                  for t in toks)
+                  and t.lower() not in _EXPORT_WORDS for t in toks)
     return has_id and has_cap
 
 

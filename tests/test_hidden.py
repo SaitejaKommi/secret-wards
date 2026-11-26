@@ -40,12 +40,16 @@ def untouched(text, value, field=None):
     "lab/9876501234_report_0047.json",
     "lab/gurmeet_bhatia_cbc.json",
     "reports/RGH2025-007731/summary.txt",
+    "notes/Gurmeet.Bhatia.txt",
+    "notes/IPD.2025.00412.txt",
+    "lab/gurmeet-bhatia-cbc.json",
+    "lab/GurmeetBhatia_cbc.json",
 ])
 def test_pii_paths_are_renamed(path):
     new = sanitize_path(path, KEY)
     assert new != path
     assert new.rsplit(".", 1)[-1] == path.rsplit(".", 1)[-1]  # extension kept
-    for bad in ("Hemlata", "gurmeet", "bhatia", "073318", "00412", "004417", "9876501234", "007731"):
+    for bad in ("Hemlata", "gurmeet", "bhatia", "Gurmeet", "Bhatia", "073318", "00412", "004417", "9876501234", "007731"):
         assert bad not in new
 
 
@@ -59,6 +63,9 @@ def test_unseen_lowercase_name_in_file_name():
     "opd/citycare_opd_2025_01.json", "fhir/bundle_a1b2c3d4.json", "clean/drug_formulary.csv",
     "lab/pathcare_results.csv", "registration/citycare_registration (1).csv", "notes/visitor_log_ward3.txt",
     "discharge/note_0004.txt", "misc/scanned_consent_form.json",
+    "registration/sitapur_district_registration.csv", "opd/lucknow_branch_opd_2025_01.json",
+    "reports/kanpur_nagar_ward_census.csv", "exports/Backup_20251126/x.json", "data/export.tar.gz",
+    "lab/agra_city_results.csv",
 ])
 def test_clean_paths_are_kept(path):
     # the contract allows a rename only when the name holds PII
@@ -83,7 +90,8 @@ def test_pii_labels(label):
 
 @pytest.mark.parametrize("label", ["visit_id", "patient_ref", "temp_f", "spo2", "Janm Tithi", "Gaon", "Pita/Pati ka Naam",
                                    "Pin Code", "Reg No", "Mobile No", "Registration Date", "जन्म तिथि", "नाम", "exported_by",
-                                   "source_path", "by_name", "weight_kg", "Umar", "Ling"])
+                                   "source_path", "by_name", "weight_kg", "Umar", "Ling", "Pradhan Nidan",
+                                   "Chikitsa Adhikari", "Bhugtan Sthiti", "Kul Rashi", "Upchar", "Rog Ka Naam"])
 def test_schema_labels_kept(label):
     assert safe_label(label, KEY) == label
 
@@ -100,6 +108,11 @@ def test_folder_with_first_name_and_initials():
     text = "D:\\HIS\\exports\\opd\\Hemlata_HC_020311\\visits_2025_01.json"
     assert covered(text, "Hemlata_HC_020311", field="source_path")
     assert untouched(text, "visits_2025_01", field="source_path")
+
+
+def test_dated_backup_folder_is_not_a_person():
+    text = "D:\\exports\\Backup_20251126\\visits.json"
+    assert untouched(text, "Backup_20251126", field="source_path")
 
 
 def test_unix_path_with_id_component():
@@ -175,3 +188,8 @@ def test_devanagari_is_not_folded():
 def test_homoglyph_disguised_phone_label_and_name():
     text = "Patient: Hеmlаtа Chhаbrа, Mоbile 9876501234"
     assert covered(text, "Hеmlаtа Chhаbrа")
+
+
+@pytest.mark.xfail(reason="an eponymous hospital name in a file name reads as a person name (unneeded rename)")
+def test_eponymous_hospital_file_name_kept():
+    assert sanitize_path("billing/ram_manohar_lohia_claims.csv", KEY) == "billing/ram_manohar_lohia_claims.csv"
