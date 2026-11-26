@@ -18,7 +18,7 @@ from .generalize import Facts, age_text, qi_key
 
 
 def _compatible(release: tuple, f: Facts, cfg: Config) -> bool:
-    age, sex, pin, dx = release
+    age, sex, pin, dx = release[:4]  # qi_key may carry more fields (birth year, district, tehsil)
     if age is not None and f.age is not None:
         if str(age) == "<18":
             if f.age >= 18:

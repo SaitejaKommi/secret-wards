@@ -30,10 +30,15 @@ def shift_date_text(original: str, days: int) -> str | None:
 
 def redact(original: str, spans: Sequence[Span], days: int, extras: Sequence[tuple[int, int, str]] = (), pin_fn=None) -> str:
     """Apply spans (placeholders / shifted dates / generalized PIN) plus extra replacements
-    (generalized ages, suppressed diagnoses). Extras that overlap a span are ignored."""
+    (generalized ages, suppressed diagnoses, birth-year bands). An extra that overlaps a span is ignored, except
+    that an extra covering whole DATE spans replaces them (a date of birth generalized to a birth-year band)."""
     items = [(s.start, s.end, s) for s in spans]
     for a, b, t in extras:
-        if not any(a < e and s < b for s, e, _ in items):
+        hit = [it for it in items if a < it[1] and it[0] < b]
+        if hit and all(not isinstance(o, str) and o.type == PIIType.DATE and a <= s and e <= b for s, e, o in hit):
+            items = [it for it in items if it not in hit]
+            hit = []
+        if not hit:
             items.append((a, b, t))
     out = []
     pos = 0
