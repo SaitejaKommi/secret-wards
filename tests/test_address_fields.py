@@ -32,7 +32,7 @@ def untouched(text, value, field=None):
 # ---------------- columns
 @pytest.mark.parametrize("hdr", ["Gaon", "Village Name", "village_name", "Mauza", "ग्राम", "गाँव का नाम", "Mohalla", "Locality",
                                  "Makan No", "house_no", "Landmark", "Gali"])
-@pytest.mark.parametrize("value", ["Kesarpura Kalan", "धनौरा खुर्द", "Lakhanpur", "12/B"])
+@pytest.mark.parametrize("value", ["Kesarpura Uttari", "धनौरा खुर्द", "Lakhanpur", "12/B"])
 def test_address_part_columns(hdr, value):
     assert covered(value, value, field=hdr)
 
@@ -51,10 +51,10 @@ def test_hospital_ward_column_is_not_an_address():
 @pytest.mark.parametrize("text,value", [
     ("ग्राम: धनौरा खुर्द\nतारीख: 01/02/2025", "धनौरा खुर्द"),
     ("गाँव - रामपुरा", "रामपुरा"),
-    ("Village: Kesarpura Kalan, Tehsil Fatehganj", "Kesarpura Kalan"),
+    ("Village: Kesarpura Uttari, Tehsil Fatehganj", "Kesarpura Uttari"),
     ("Gaon: Lakhanpur  Umar: 45", "Lakhanpur"),
     ("Mauza: Bhaironpur, Post Khera", "Bhaironpur"),
-    ("Mohalla: Qazi Tola; Pin 123456", "Qazi Tola"),
+    ("Mohalla: Neem Tola; Pin 123456", "Neem Tola"),
     ("Landmark: Purana Peepal Ped", "Purana Peepal Ped"),
     ("मकान नं.: 45/7", "45/7"),
     ("Gram: Sundarpur", "Sundarpur"),
@@ -64,14 +64,14 @@ def test_labelled_values(text, value):
 
 
 def test_label_value_stops_before_tehsil():
-    text = "Village: Kesarpura Kalan, Tehsil Fatehganj"
+    text = "Village: Kesarpura Uttari, Tehsil Fatehganj"
     assert untouched(text, "Fatehganj") or not [s for s in _spans(text) if s.detector == "address_fields"
                                                 and text[s.start:s.end].endswith("Fatehganj")]
 
 
 # ---------------- municipal ward vs hospital ward
 @pytest.mark.parametrize("text", ["Address (attendant): C/O Gurmeet Bhatia, Ward 3",
-                                  "H.No. 21, Ward 14, Mohalla Purani Bazar, Tehsil Fatehganj",
+                                  "H.No. 21, Ward 14, Mohalla Sabzi Mandi, Tehsil Fatehganj",
                                   "पता: मकान नं. 9, वार्ड 6, मोहल्ला नई बस्ती"])
 def test_municipal_ward_in_address(text):
     w = "Ward 3" if "Ward 3" in text else ("Ward 14" if "Ward 14" in text else "वार्ड 6")
