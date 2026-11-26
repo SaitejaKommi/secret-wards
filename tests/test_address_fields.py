@@ -70,7 +70,7 @@ def test_label_value_stops_before_tehsil():
 
 
 # ---------------- municipal ward vs hospital ward
-@pytest.mark.parametrize("text", ["Address (attendant): C/O Mohan Lal, Ward 3",
+@pytest.mark.parametrize("text", ["Address (attendant): C/O Gurmeet Bhatia, Ward 3",
                                   "H.No. 21, Ward 14, Mohalla Purani Bazar, Tehsil Fatehganj",
                                   "पता: मकान नं. 9, वार्ड 6, मोहल्ला नई बस्ती"])
 def test_municipal_ward_in_address(text):
