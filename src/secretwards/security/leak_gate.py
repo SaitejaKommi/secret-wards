@@ -20,6 +20,7 @@ import regex as re
 
 from ..contracts import ID_TYPES, PIIType, QReason, QuarantineEntry, RedactedRecord
 from ..detect import lexicon as L
+from ..detect.merge import UUID_LIKE
 from ..normalize.dates import find_dates
 from ..normalize.text import normalize, ocr_digit_view
 
@@ -95,12 +96,20 @@ def _digit_windows(s: str, n: int):
         yield s[i:i + n]
 
 
+def _mask_uuids(text: str) -> str:
+    """Blank out UUID-like tokens (same length, so offsets stay valid). A UUID is a record key; its hex letters read as digits in the
+    OCR view and would otherwise look like a phone number now and then."""
+    if "-" not in text:
+        return text
+    return UUID_LIKE.sub(lambda m: " " * (m.end() - m.start()), text)
+
+
 def scan(rv: RawValues, text: str) -> dict[str, int]:
     """Count leaks of each kind in one piece of output text."""
     hits = defaultdict(int)
     if not text:
         return hits
-    n = normalize(text).text
+    n = _mask_uuids(normalize(text).text)
     view = ocr_digit_view(n)
     doc_words = _doctor_words(n)
     for m in _WORD.finditer(n):
@@ -145,19 +154,20 @@ def _repair(rv: RawValues, text: str, seen: set | None = None) -> str:
     if not text:
         return text
     n = normalize(text)
+    ntext = _mask_uuids(n.text)
     spans: list[tuple[int, int, str]] = []
-    doc_words = _doctor_words(n.text)
-    for m in _WORD.finditer(n.text):
+    doc_words = _doctor_words(ntext)
+    for m in _WORD.finditer(ntext):
         if m.group().lower() in rv.names and (m.start(), m.end()) not in doc_words:
             a, b = n.to_orig(m.start(), m.end())
             spans.append((a, b, "[NAME]"))
             if seen is not None:
                 seen.add(m.group().lower())
-    view = ocr_digit_view(n.text)
+    view = ocr_digit_view(ntext)
     for m in _PHONE_RES.finditer(view):
         a, b = n.to_orig(m.start(), m.end())
         spans.append((a, b, "[PHONE]"))
-    for m in _EMAIL_RES.finditer(n.text):
+    for m in _EMAIL_RES.finditer(ntext):
         a, b = n.to_orig(m.start(), m.end())
         spans.append((a, b, "[EMAIL]"))
     for m in _ABHA_RES.finditer(view):

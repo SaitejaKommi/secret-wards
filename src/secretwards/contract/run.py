@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import sys
 import time
@@ -19,7 +20,9 @@ from pathlib import Path
 from ..config import Config
 from ..contracts import PIIType, RedactedRecord
 from ..detect import default_detectors
+from ..detect.hidden import clean_encoded
 from ..detect.learned import NameMemory
+from ..detect.merge import UUID_LIKE
 from ..link import link_documents
 from ..link.mention import build_mention
 from ..normalize.text import normalize, ocr_digit_view
@@ -28,6 +31,7 @@ from ..detect import detect_unit
 from ..privacy.generalize import age_text, extract_facts, overrides, pin_text, plan_levels
 from ..privacy.pseudonym import shift_days
 from ..privacy.render import redact
+from ..security.keys import hmac_hex
 from ..security.keys import KeysMissing, keys_from_secret
 from ..security.leak_gate import gate
 from .readers import Parsed, Skip, read_file
@@ -38,6 +42,28 @@ ENTITY_LABEL = {
     PIIType.NAME: "NAME", PIIType.PHONE: "PHONE", PIIType.EMAIL: "EMAIL", PIIType.DATE: "DATE", PIIType.ABHA: "ABHA_NUMBER",
     PIIType.INSURANCE: "INSURANCE_ID", PIIType.MRN: "MRN", PIIType.ID: "ID", PIIType.ADDRESS: "ADDRESS", PIIType.PINCODE: "PIN",
 }
+
+
+def _alias_uuids(text: str, keys) -> str:
+    """Replace every UUID (FHIR resource id, urn:uuid reference) with a keyed, valid UUID. The same UUID always maps to the same
+    alias, so references still resolve, and nothing of the original (some carry a phone number's digits) is left."""
+    if "-" not in text:
+        return text
+
+    def alias(m) -> str:
+        h = hmac_hex(keys.docid, "uuid", m.group().lower(), n=32)
+        return f"{h[:8]}-{h[8:12]}-4{h[13:16]}-{'89ab'[int(h[16], 16) % 4]}{h[17:20]}-{h[20:32]}"
+
+    return UUID_LIKE.sub(alias, text)
+
+
+_BLOB = re.compile(r"\s*[A-Za-z0-9+/]{24,}={0,2}\s*")
+
+
+def _redact_plain(text: str, detectors, days: int, pin_fn) -> str:
+    """Detect and redact a short plain string (the decoded text of an attachment)."""
+    spans, _ = detect_unit(make_unit("x", None, text), detectors)
+    return redact(text, [s for s in spans if s.role != "doctor"], days, [], pin_fn)
 
 
 def peak_rss_mb() -> float:
@@ -203,6 +229,10 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
                         keep = [s for s in keep if s not in repl]
                         extras += [(s.start, s.end, ps) for s in repl]
                 out_text = redact(u.original, keep, days, extras, pin_fn)
+                out_text = _alias_uuids(out_text, keys)
+                if u.field is not None and _BLOB.fullmatch(u.original):
+                    # a base64 attachment must stay valid base64: clean the decoded text and re-encode it
+                    out_text = clean_encoded(u.original, lambda t, d=days, f=pin_fn: _redact_plain(t, detectors, d, f))
                 if u.field is None:
                     text = out_text
                 else:
