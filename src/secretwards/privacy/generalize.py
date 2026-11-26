@@ -25,12 +25,13 @@ import regex as re
 
 from ..config import Config
 from ..contracts import Document, MedKind, Mention, PIIType
+from ..detect.diagnosis import dx_entry_end, dx_key
 from ..detect.headers import hint_for
 from ..normalize.text import normalize
 
 MAX_LEVEL = 6
 _DX_LABEL = re.compile(
-    r"(?:principal\s+diagnosis|final\s+diagnosis|diagnosis|dx|निदान|bimari|rog|रोग|शिकायत/निदान)\s*[:\-]\s*([^\n.;|,]{3,80})", re.I)
+    r"(?:principal\s+diagnosis|final\s+diagnosis|diagnosis|dx|निदान|bimari|rog|रोग|शिकायत/निदान)\s*[:\-]\s*(?=[^\s;|])", re.I)
 _DX_HEADER = re.compile(r"diagnos|\bdx\b|निदान|bimari|\brog\b|रोग|disease|illness", re.I)
 _NUM = re.compile(r"\d{1,3}")
 
@@ -45,12 +46,6 @@ class Facts:
     los: Optional[int] = None
     age_spans: list = field(default_factory=list)  # (field, start, end) in original coordinates
     dx_spans: list = field(default_factory=list)
-
-
-def _dx_norm(s: str) -> str:
-    s = normalize(s).text.lower()
-    s = re.sub(r"[^\p{L}\p{M}\d ]+", " ", s)
-    return re.sub(r"\s+", " ", s).strip()
 
 
 def extract_facts(doc: Document, units, spans, meds, mention: Mention) -> Facts:
@@ -74,14 +69,17 @@ def extract_facts(doc: Document, units, spans, meds, mention: Mention) -> Facts:
         # diagnosis: a diagnosis column or a labelled line
         if u.field is not None and _DX_HEADER.search(u.header) and text.strip() and f.dx is None:
             if not any(s.start < len(text) and s.end > 0 for s in spans[u.field] if s.type != PIIType.DATE):
-                f.dx = _dx_norm(text)
+                f.dx = dx_key(text)
                 f.dx_spans.append((u.field, 0, len(text)))
         else:
             for m in _DX_LABEL.finditer(u.norm.text):
-                val = m.group(1).strip()
-                if val and f.dx is None:
-                    a, b = u.norm.to_orig(m.start(1), m.start(1) + len(m.group(1).rstrip()))
-                    f.dx = _dx_norm(val)
+                # the WHOLE first entry, ICD code included ("Gout, unspecified (M10.9)"): suppressing a fragment
+                # left the code, which names the disease, in the clear
+                a0 = m.end()
+                b0 = dx_entry_end(u.norm.text, a0)
+                if b0 - a0 >= 3 and f.dx is None:
+                    a, b = u.norm.to_orig(a0, b0)
+                    f.dx = dx_key(u.norm.text[a0:b0])
                     f.dx_spans.append((u.field, a, b))
     # dedupe overlapping age spans (a labelled "26 yrs / Male" can match twice)
     seen, uniq = set(), []

@@ -110,3 +110,18 @@ def test_medical_phrases_untouched(text, keep):
 ])
 def test_known_address_py_false_positives(text, keep):
     assert untouched(text, keep)
+
+
+@pytest.mark.parametrize("text,value", [
+    ("Makan No. 67, Mohalla Neem Tola, Zila Fatehganj", "Makan No. 67"),
+    ("makaan number 7/2, gali 3", "makaan number 7/2"),
+    ("मकान नं. 58, वार्ड 6", "मकान नं. 58"),
+    ("Ghar No 112B near school", "Ghar No 112B"),
+])
+def test_house_number_with_hindi_marker(text, value):
+    assert covered(text, value)
+
+
+def test_house_marker_needs_a_number_word():
+    # "ghar" alone is ordinary Hinglish ("ghar par aaram"), not an address
+    assert untouched("ghar par aaram karein 3 din", "ghar")

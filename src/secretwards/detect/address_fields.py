@@ -47,6 +47,11 @@ _STOP = re.compile(
     r"तहसील|जिला|पोस्ट|थाना|पिन|ब्लॉक)\b|\s[\p{L}\p{M}.]+\s*:", re.I)
 _MAX_VALUE = 48
 
+# house numbers written with a Hindi / Hinglish marker and no colon: "Makan No. 67", "मकान नं. 67", "Ghar No 7/2"
+_HOUSE_MARK = re.compile(
+    r"(?<![\p{L}\p{M}])(?:makaa?n|ghar|मकान|घर)\s*(?:no\.?|number|nambar|sankhya|नं\.?|नंबर|संख्या|सं\.?)\s*[:\-#.]?\s*"
+    r"[A-Za-z]?\d{1,5}(?:\s*[/\-]\s*[A-Za-z0-9]{1,4})?[A-Za-z]?(?![\d])", re.I)
+
 _WARD = re.compile(r"(?<![\p{L}\p{M}])(?:ward|वार्ड)\s*(?:no\.?|नं\.?|सं\.?)?\s*[:\-]?\s*\d{1,3}(?![\d/])", re.I)
 _ADDR_CUE = re.compile(
     r"(?<![\p{L}])(?:h\.?\s?no|house|mohall?a|muhall?a|tehsil|tahsil|distt?|district|village|gaon|vill|post|c\s*/\s*o|s\s*/\s*o|"
@@ -91,7 +96,11 @@ class AddressFieldDetector:
                     continue
                 col.add(a, a + len(value), PIIType.ADDRESS, 0.85)
 
-        # 3. municipal ward inside an address line
+        # 3. house number with a Hindi / Hinglish marker
+        for m in _HOUSE_MARK.finditer(text):
+            col.add(m.start(), m.end(), PIIType.ADDRESS, 0.85)
+
+        # 4. municipal ward inside an address line
         for m in _WARD.finditer(text):
             ls = text.rfind("\n", 0, m.start()) + 1
             le = text.find("\n", m.end())
