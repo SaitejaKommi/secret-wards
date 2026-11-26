@@ -20,6 +20,7 @@ from pathlib import Path
 from ..config import Config
 from ..contracts import PIIType, RedactedRecord
 from ..detect import default_detectors
+from .audit import AuditTrail
 from ..detect.hidden import clean_encoded
 from ..detect.learned import NameMemory
 from ..fhir.sanitize import apply_bundle_policy, bundle_actions, is_bundle
@@ -114,9 +115,15 @@ def _cleanup(out: Path) -> None:
             p.unlink()
 
 
+def _ident(s: str) -> str:
+    """A reason code or stat name as a plain lowercase identifier (the audit trail accepts nothing else)."""
+    return re.sub(r"[^a-z0-9_]+", "_", str(s).lower()).strip("_")[:40] or "unknown"
+
+
 def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
     t0 = time.monotonic()
     keys = keys_from_secret(secret)
+    audit = AuditTrail(keys)
     cfg = Config()
     detectors = default_detectors()
     max_bytes = cfg.max_file_mb * 1024 * 1024
@@ -159,6 +166,10 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
         entries.append(e)
         del raw
 
+    reasons = Counter(_ident(e.reason or "internal_error") for e in entries if e.parsed is None)
+    audit.record("ingest", files=len(entries), parsed=sum(1 for e in entries if e.parsed is not None),
+                 quarantined=sum(1 for e in entries if e.parsed is None), **{f"quarantine_{k}": v for k, v in sorted(reasons.items())})
+
     # ---- 2. detect
     results: dict = {}
     for e in entries:
@@ -189,6 +200,9 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
         if is_bundle(r.doc.fields):
             apply_bundle_policy(r.doc.fields, r.units, r.spans)
 
+    audit.record("detect", records=len(results), bundles=sum(1 for r in results.values() if is_bundle(r.doc.fields)),
+                 spans=sum(len(v) for r in results.values() for v in r.spans.values()))
+
     # ---- 3. link, quasi-identifier plan
     mention_of = {d: build_mention(r.doc, r.units, r.spans, r.meds) for d, r in results.items()}
     clusters = link_documents(list(mention_of.values()), keys, cfg)
@@ -197,6 +211,8 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
     size_of = {d: len(c.doc_ids) for c in clusters for d in c.doc_ids}
     facts = {d: extract_facts(r.doc, r.units, r.spans, r.meds, mention_of[d]) for d, r in results.items()}
     levels, suppress_dx, _rare = plan_levels(facts, raw_ps, cfg)
+    audit.record("link", clusters=len(clusters), records_linked=sum(1 for v in size_of.values() if v >= 2), largest_cluster=max(size_of.values(), default=0))
+    audit.record("privacy", rare_diagnoses_suppressed=len(suppress_dx), **{f"level_{lv}": sum(1 for v in levels.values() if v == lv) for lv in range(7)})
 
     # ---- 4. render in place. Doctors stay. A pseudonym is written into a record only when we also claim it.
     red: dict[str, RedactedRecord] = {}
@@ -259,6 +275,7 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
     exempt = {d: frozenset(f for f, a in bundle_actions(r.doc.fields).items() if a == "keep")
               for d, r in results.items() if is_bundle(r.doc.fields)}
     red, _gated, gate_stats = gate(red, results, cfg, mode="redact", name_exempt=exempt)
+    audit.record("gate", **{_ident(k): int(v) for k, v in gate_stats.items()})
 
     # ---- 6. rebuild every file in its original format
     renamer = Renamer(keys, detectors, mem)
@@ -291,6 +308,7 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
             lines.append({"file": f"sanitized/{new_rel}", "loc": rec.loc, "patient": claim[rec.doc.doc_id]})
 
     n_san = sum(1 for e in entries if e.data is not None)
+    audit.record("write", files_sanitized=n_san, files_quarantined=len(entries) - n_san, records=len(lines))
     report = {
         "schema": "raksha-report/1",
         "files": [
@@ -306,6 +324,7 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
             "records_suppressed": 0, "records_quarantined": 0,
         },
         "entities": dict(sorted(entities.items())),
+        "audit": audit.export(),
         "timing": {"seconds": round(time.monotonic() - t0, 2)},
         "resources": {"peak_rss_mb": peak_rss_mb()},
     }
