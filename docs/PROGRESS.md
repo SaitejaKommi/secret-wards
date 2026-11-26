@@ -21,6 +21,8 @@ P4 stand-in attacker + tuning [ ] (Jaisheel), P5 identity in `records.jsonl` [ ]
 
 ## Teammates
 - [ ] Jaisheel (branches `feat/detection`, `feat/fhir`, `feat/attacker`): India ID / address-field / hidden-place detectors, FHIR sanitizer, stand-in attacker and tuning, diagnosis key, CRF last (docs/FRIEND_TASKS.md section 5)
+  - [x] Step 1 (2026-11-26, `feat/detection`): `detect/india_ids.py` (Aadhaar full/masked, PAN, hospital numbers by shape + label) and `detect/address_fields.py` (village/locality/house/landmark by column meaning and label; municipal vs hospital ward). Practice data via `adapt_for_checkdev.py`: leaked 152 -> 69 of 3230 (4.7% -> 2.1%); Aadhaar 31% -> 0, PAN 95.5% -> 0, MRN 8.6% -> 6.4% (rest is filename/metadata, step 2), village 12% -> 0, locality 2.9% -> 0; content channel 2.8% -> 0.0%; deva 7.0% -> 0. Medical kept 3532 -> 3566; records out 825 -> 852 of 1209 (gate quarantines fewer); `clean/` placeholders 6 -> 6. Synthetic dev and blind unchanged. Link precision vs truth (comparable files, measurement script) 1.000 -> 1.000, recall 0.46 -> 0.70. Tests 100 -> 238 (+3 strict xfail: false positives of `detect/address.py` on "colony count", "house surgeon", "50 ग्राम").
+  - [ ] Step 2 hidden places (filename 100%, metadata 50%, base64 10%), step 3 meaning traps, steps 4-7.
 - [ ] Saiteja (branches `feat/contract`, `feat/identity`, `feat/hygiene`): contract adapter, gate and merge fixes, identity in records.jsonl, hygiene and security, README, brief (section 6)
 
 ## Metrics (synthetic; fresh seeds 991 / 992 / 993, audit of 2026-11-26)
