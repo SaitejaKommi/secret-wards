@@ -39,9 +39,10 @@ _PATIENT_SIDE = frozenset({"Patient", "Person"})
 _RELATIVE_SIDE = frozenset({"RelatedPerson"})
 
 # element paths (indices removed) that never carry personal data in any resource
+# (not lastUpdated: it is an instant, usually the day of the visit; left unshifted it lets an attacker who knows the visit date undo the shift)
 _ALWAYS_KEEP = re.compile(
     r"(?:^|\.)(?:resourceType|id|reference|status|intent|gender|use|system|code|version|unit|comparator|language|contentType|"
-    r"url|profile|lastUpdated|versionId|div\.status)$|"
+    r"url|profile|versionId|div\.status)$|"
     r"(?:^|\.)coding\.display$|(?:^|\.)value(?:Quantity|Range|Ratio)\.|(?:^|\.)(?:value|low|high)\.value$|"
     r"(?:^|\.)(?:class|category|type|relationship|qualification\.code|clinicalStatus|verificationStatus)\.(?:coding\.)?(?:display|text)$")
 _NAME = re.compile(r"^(?:name|contact\.name|alias)(?:\.(?:text|family|given|prefix|suffix))?$")
