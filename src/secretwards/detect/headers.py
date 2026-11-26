@@ -25,6 +25,9 @@ _DOB = re.compile(r"\bdob\b|birth|d\.o\.b|जन्म", re.I)
 _DATE = re.compile(r"\bdate\b|\bdt\b|admit|admission|discharge|\bdoa\b|\bdod\b|तिथि|तारीख|भर्ती|छुट्टी|tareekh", re.I)
 _ID = re.compile(r"\bmrn\b|uhid|\breg\b|registration|\buid\b|\bid\b|\bno\.?$|number|संख्या|क्रम|abha|insurance|policy|\bhospital no", re.I)
 _AGE = re.compile(r"\bage\b|\byears?\b|\bumar\b|आयु|उम्र|\bage/sex\b|\bage/gender\b", re.I)
+_NONPERSON = re.compile(
+    r"test|drug|medic|diagnos|hospital|department|dept|\bward|facility|organi[sz]ation|panel|\bitem|service|procedure|specimen|"
+    r"sample|insurer|company|clinic|ticket|title|\bform\b|\bfile\b|report|\blab\b|vaccine|symptom|complaint|disease|speciality|specialty", re.I)
 _SEX = re.compile(r"\bsex\b|gender|लिंग|\bm/f\b", re.I)
 
 
@@ -56,6 +59,8 @@ def hint_for(header: str) -> Hint:
         return Hint("sex")
     if _DATE.search(h):
         return Hint("date")
-    if _NAME.search(h):
+    if _NAME.search(h) and not _NONPERSON.search(h):
         return Hint("name", "patient")
+    if _NONPERSON.search(h):
+        return Hint("nonperson")  # a test / drug / hospital / department column: capitalised words there are not people
     return Hint("")

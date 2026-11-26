@@ -62,6 +62,8 @@ def collect(results) -> RawValues:
                 if t == PIIType.NAME:
                     if s.role == "doctor":
                         continue  # "Dr. <name>" lines are medical context and stay in the release
+                    if s.score < 0.55:
+                        continue  # a weak guess (a capital-run heuristic) redacts locally; it must not become a dataset-wide rule
                     for m in _WORD.finditer(raw):
                         w = m.group()
                         wl = w.lower()

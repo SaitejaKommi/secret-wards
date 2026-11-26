@@ -138,7 +138,7 @@ def test_admission_date_column_is_a_date_not_an_id():
 
 
 def test_date_after_prefix_is_not_an_mrn():
-    out = spans("DOB-12/04/1977")
+    out = spans("DOB-07/09/1985")
     assert not [v for t, v in out if t == PIIType.MRN]
 
 
