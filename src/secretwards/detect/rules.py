@@ -110,8 +110,14 @@ class RuleDetector:
             col.add(m.start(), m.end(), PIIType.ID, 0.6)
         for m in _PIN_CUE.finditer(view):
             col.add(m.start(1), m.end(1), PIIType.PINCODE, 0.9)
-        for dm in find_dates(view):
-            col.add(dm.start, dm.end, PIIType.DATE, 0.9)
+        # Dates are looked for in the plain text (month names: the OCR view would turn the letters of "15-Jul-58" into digits) and in the OCR
+        # view (garbled digits such as 12/O3/2O25); the union of both is used.
+        seen_dates: set[tuple[int, int]] = set()
+        for src in (text, view):
+            for dm in find_dates(src):
+                if (dm.start, dm.end) not in seen_dates:
+                    seen_dates.add((dm.start, dm.end))
+                    col.add(dm.start, dm.end, PIIType.DATE, 0.9)
 
         # header-driven whole-cell rules (fail closed on malformed values in typed columns)
         stripped = text.strip()
