@@ -193,3 +193,14 @@ def test_homoglyph_disguised_phone_label_and_name():
 @pytest.mark.xfail(reason="an eponymous hospital name in a file name reads as a person name (unneeded rename)")
 def test_eponymous_hospital_file_name_kept():
     assert sanitize_path("billing/ram_manohar_lohia_claims.csv", KEY) == "billing/ram_manohar_lohia_claims.csv"
+
+
+def test_canonical_urls_are_kept():
+    for url in ("https://example.org/fhir/StructureDefinition/DocumentBundle",
+                "http://terminology.example.org/CodeSystem/v3-ActCode", "https://example.org/fhir/ValueSet/MaritalStatus"):
+        assert not _spans(url, field="meta.profile"), url
+
+
+def test_url_with_patient_folder_is_redacted():
+    url = "https://files.example.org/exports/Hemlata_HC_020311/report.pdf"
+    assert covered(url, "Hemlata_HC_020311", field="url")

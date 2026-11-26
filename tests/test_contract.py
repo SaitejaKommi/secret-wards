@@ -236,3 +236,15 @@ def test_fatal_error_removes_partial_output_and_leaks_no_message(inp, tmp_path, 
     err = capsys.readouterr()
     assert "ValueError" in err.err and "Wadekar" not in err.out + err.err
     assert not (out / "sanitized").exists() and not (out / "report.json").exists() and not (out / "records.jsonl").exists()
+
+
+def test_plain_schema_words_are_not_renamed():
+    """FHIR's "extension" is on the address detector's street-type list; as a key it must not be treated as personal data."""
+    from secretwards.contract.renamer import Renamer
+    from secretwards.detect import default_detectors
+    from secretwards.security.keys import keys_from_secret
+
+    rn = Renamer(keys_from_secret(b"k"), default_detectors())
+    for k in ("extension", "telecom", "status", "contact", "address", "identifier"):
+        assert rn.key(k) == k, k
+    assert rn.key("9871234560") != "9871234560"  # a phone number as a key is still renamed

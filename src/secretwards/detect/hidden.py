@@ -325,13 +325,22 @@ class HiddenDetector:
         stripped = text.strip()
         if " " not in stripped or "\\" in stripped:
             if _PATHY.search(stripped) or (unit.header and _PATH_HDR.search(unit.header) and _PATH_SPLIT.search(stripped)):
+                is_url = bool(re.match(r"[a-z][a-z0-9+.-]*://", stripped, re.I))
                 pos = 0
                 for seg in _PATH_SPLIT.split(text):
                     a = text.index(seg, pos) if seg else pos
                     b = a + len(seg)
                     pos = b
                     stem, _ = _split_ext(seg)
-                    if stem and (_person_folder(stem) or component_has_pii(stem)):
+                    if not stem:
+                        continue
+                    if is_url:
+                        # canonical URLs (FHIR profiles, code systems, extension urls) are CamelCase vocabulary
+                        # ("StructureDefinition/DocumentBundle"): only an id-shaped token or a <Name>_<id> folder counts
+                        hit = _person_folder(stem) or any(_token_kind(t) for t in _SEP.split(stem) if t)
+                    else:
+                        hit = _person_folder(stem) or component_has_pii(stem)
+                    if hit:
                         col.add(a, a + len(stem), PIIType.ID, 0.9)
 
         # 2. encoded runs whose decoded text holds PII

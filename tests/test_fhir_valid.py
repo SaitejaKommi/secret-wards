@@ -83,8 +83,6 @@ def test_aliases_depend_on_the_secret_and_are_stable(tmp_path):
 import pytest  # noqa: E402
 
 
-@pytest.mark.xfail(reason="FHIR step 4 (Jaisheel): HumanName family / given are not name fields yet, so a name that is not in the "
-                          "gazetteer survives inside a Bundle. Needs resource awareness: a Practitioner's name stays, a Patient's goes.")
 def test_unseen_patient_name_in_humanname_is_removed(tmp_path):
     inp, out = tmp_path / "in", tmp_path / "out"
     (inp / "fhir").mkdir(parents=True)
@@ -92,3 +90,16 @@ def test_unseen_patient_name_in_humanname_is_removed(tmp_path):
     assert run_contract(inp, out, b"fhir-test-secret") == 0
     raw = next((out / "sanitized" / "fhir").glob("*.json")).read_text(encoding="utf-8")
     assert "Quillfeather" not in raw and "Zephyrine" not in raw
+
+
+def test_name_known_only_from_a_bundle_is_found_elsewhere_without_a_cue(tmp_path):
+    """The policy runs before name learning, so a Patient.name in a Bundle teaches the name memory (invented, unseen name)."""
+    inp, out = tmp_path / "in", tmp_path / "out"
+    (inp / "fhir").mkdir(parents=True)
+    (inp / "notes").mkdir()
+    (inp / "fhir" / "bundle_a.json").write_text(json.dumps(bundle(), indent=2), encoding="utf-8")
+    (inp / "notes" / "ward_round.txt").write_text("ward round: zephyrine quillfeather doing well, continue Tab Metformin 500 mg 1-0-1.\n", encoding="utf-8")
+    assert run_contract(inp, out, b"fhir-test-secret") == 0
+    note = (out / "sanitized" / "notes" / "ward_round.txt").read_text(encoding="utf-8").lower()
+    assert "zephyrine" not in note and "quillfeather" not in note
+    assert "metformin 500 mg 1-0-1" in note
