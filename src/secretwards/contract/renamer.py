@@ -24,9 +24,10 @@ _SAFE_WORDS = (L.HEADER_WORDS | L.CLINICAL_WORDS | L.COMMON_WORDS)
 
 
 class Renamer:
-    def __init__(self, keys: Keys, detectors: Sequence[Detector]):
+    def __init__(self, keys: Keys, detectors: Sequence[Detector], memory=None):
         self.keys = keys
         self.detectors = detectors
+        self.memory = memory  # names learned from the data itself (NameMemory): a file called after a patient is renamed
         self._cache: dict[str, bool] = {}
 
     # ---- does this short string hold personal data?
@@ -48,6 +49,8 @@ class Renamer:
                 return True
         spaced = _SPLIT.sub(" ", text)
         if self._detected(text) or self._detected(spaced):
+            return True
+        if self.memory is not None and self.memory.find(make_unit("x", None, re.sub(r"(?<=[a-z])(?=[A-Z])", " ", spaced)), []):
             return True
         if filename:
             # a Title-case word that is not ordinary document vocabulary is probably a person's name
