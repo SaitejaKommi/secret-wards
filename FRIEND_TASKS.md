@@ -59,6 +59,21 @@ Always run the pipeline on the `.../in` folder, never on the folder that holds `
 - Open a pull request into `main`. The lead reviews and merges. Keep PRs under about 400 changed lines.
 - Update your sections of `docs-wt/PROGRESS.md` on the `docs` branch after each finished task (`cd docs-wt && git add -A && git commit && git push`).
 - NEVER commit: `keys/`, `*.key`, `data/`, `out/`, `.venv/`, caches. `.gitignore` covers them; check `git status` before every commit.
+### Pull request steps (copy these)
+```
+git fetch origin
+git checkout -b feat/detection origin/main        # Friend B: feat/output-security
+# ... work, small commits ...
+python -m pytest -q
+git push -u origin feat/detection
+gh pr create --base main --head feat/detection --title "short title" --body "what changed; test result; scorer numbers before/after"
+```
+- You need to be added as a collaborator first (lead: GitHub repo, Settings, Collaborators). Accept the invitation, then clone.
+- Keep your branch current with `git fetch origin && git merge origin/main` (a merge commit is fine). Do not rebase or force-push anything already pushed.
+- One topic per PR. Do not edit files owned by the other friend or the lead (see your section). If you must, ask in the PR first.
+- The lead reviews and merges; nobody pushes to `main`. Only the lead merges `feat/*` into `main`.
+- If a PR touches `src/secretwards/contracts.py` it will not be merged without the lead's explicit OK.
+
 - Rules that cannot be broken: no LLMs or generative models, no model over 50M parameters, no network at run time, deterministic output,
   no real personal data anywhere (fake data only), no PII in logs, errors, tests or docs, no hardcoding to our own fake names or templates,
   fail closed (quarantine when unsure).
