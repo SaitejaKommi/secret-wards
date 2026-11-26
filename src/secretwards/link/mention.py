@@ -163,6 +163,18 @@ def build_mention(doc: Document, units, spans, meds) -> Mention:
         name = ()
     ref_year = min(years) if years else None
 
+    # A ward log, bed list or lab batch names many people. Its identifiers belong to different patients, so using them would glue
+    # those patients' records together: such a document carries no identity evidence at all (it gets no pseudonym of its own claim).
+    strong_ids = set(phones) | set(emails) | set(abha) | set(ins) | {x for x in mrn if not x.startswith(("AADHAAR", "PAN"))}
+    groups: list[set[str]] = []
+    for words in names_pat + names_any:
+        keys_ = {skeleton(w) for w in words if len(skeleton(w)) >= 3}
+        hit = [g for g in groups if g & keys_]
+        merged = set(keys_).union(*hit) if hit else set(keys_)
+        groups = [g for g in groups if g not in hit] + [merged]
+    if len(strong_ids) >= 6 or (len(groups) >= 6 and len(strong_ids) >= 3):
+        return Mention(doc.doc_id, doc.hospital)
+
     def uniq(xs):
         return tuple(dict.fromkeys(xs))
 

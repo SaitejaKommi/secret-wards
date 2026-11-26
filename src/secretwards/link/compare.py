@@ -68,6 +68,12 @@ def evaluate(a: Mention, b: Mention) -> PairResult:
             abha_equal = True
         else:
             veto = "abha_differs"
+    # a person has one Aadhaar and one PAN: if both records carry one and they differ (not even by one typo), they are different people
+    for kind in ("AADHAAR", "PAN"):
+        ka = [x[len(kind):] for x in a.mrn if x.startswith(kind)]
+        kb = [x[len(kind):] for x in b.mrn if x.startswith(kind)]
+        if ka and kb and min(Levenshtein.distance(x, y) for x in ka for y in kb) >= 2 and not veto:
+            veto = "national_id_differs"
     shared_ids = set(a.mrn) & set(b.mrn)
     national = any(x.startswith(("AADHAAR", "PAN")) for x in shared_ids)
     cross_site_mrn = bool(shared_ids) and not national and a.hospital != b.hospital
