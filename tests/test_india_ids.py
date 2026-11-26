@@ -116,7 +116,7 @@ def test_hospital_number_column(hdr):
 
 # ---------------- meaning traps: these must NOT become ids
 @pytest.mark.parametrize("text,keep", [
-    ("BP 133/69 mmHg, Pulse 82/min", "133/69"),
+    ("BP 141/77 mmHg, Pulse 91/min", "141/77"),
     ("BP-130/80 sitting", "130/80"),
     ("WBC 11200 /cumm", "11200"),
     ("COVID-19 negative", "COVID-19"),
@@ -149,7 +149,7 @@ def test_deterministic():
 
 # ---------------- MRN feeds linking: doctor / facility numbers must never be typed MRN
 _NON_PATIENT = [
-    ("Dr. A. Verma, MBBS, Reg. No. 45678", "45678"),
+    ("Dr. P. Lohani, MBBS, Reg. No. 45678", "45678"),
     ("Regd. No: XY/CEA/2019/1234", "XY/CEA/2019/1234"),
     ("Drug Lic. No: 20B-55123", "55123"),
     ("Hospital Reg No: HR-2011-00456", "HR-2011-00456"),
