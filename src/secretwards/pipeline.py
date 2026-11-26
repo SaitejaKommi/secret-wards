@@ -39,12 +39,46 @@ def field_ref(keys: Keys, f: Optional[str]) -> str:
     return "" if f is None else hmac_hex(keys.docid, "fld", f, n=8)
 
 
-def header_of(field_name: str) -> str:
-    """Header hint for a table column or JSON path: last key, snake/camel case split into words."""
-    s = re.sub(r"\[\d+\]", "", field_name)
-    s = s.split(".")[-1]
-    s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s).replace("_", " ")
+# Leaf keys that say nothing about what they hold. Under an informative parent object ("addr": {"v": ...}) they take the parent's meaning.
+_GENERIC_LEAF = frozenset({"v", "n", "s", "val", "value", "text", "txt", "str", "string", "data", "line", "line1", "line2", "line3", "l1", "l2", "l3"})
+# Leaves inside an address object that are schema words or kept on purpose (district / tehsil / state generalize rather than disappear)
+_ADDRESS_SCHEMA = re.compile(
+    r"^(?:use|type|status|kind|label|category|country|cntry|period|start|end|id|code|system|state|st|district|dist|distt|dt|tehsil|tahsil|teh|tq|taluk|taluka|zila|jila)$")
+
+
+def _norm_key(seg: str) -> str:
+    s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", seg).replace("_", " ")
     return s.strip().lower()
+
+
+def header_of(field_name: str, source: Optional[str] = None) -> str:
+    """Header hint for a table column or JSON path.
+
+    A CSV / TSV column name is used whole ("Mob." and "Pt. Name" contain dots). A JSON path ("encounters[0].addr.v") is split into keys:
+    the last key is the header, snake/camel case split into words. If the last key tells us nothing (a short or generic key such as "v",
+    "tq", "n", or any unknown key inside an address object), the nearest informative parent key is added in front, so "addr" gives the
+    leaf an address meaning. A leaf that has a meaning of its own never changes."""
+    from .detect.headers import hint_for  # local import: avoids a cycle at import time
+
+    if source in ("csv", "tsv"):
+        return _norm_key(re.sub(r"\[\d+\]", "", field_name))
+    parts = [p for p in re.sub(r"\[\d+\]", "", field_name).split(".") if p.strip()]
+    if not parts:
+        return ""
+    leaf = _norm_key(parts[-1])
+    if len(parts) > 1 and hint_for(leaf).kind == "":
+        for anc in reversed(parts[:-1]):
+            a = _norm_key(anc)
+            kind = hint_for(a).kind
+            if not kind:
+                continue
+            if kind == "address":
+                if not _ADDRESS_SCHEMA.match(leaf):
+                    return f"{a} {leaf}"
+            elif kind in ("name", "phone", "email") and (len(leaf) <= 3 or leaf in _GENERIC_LEAF):
+                return f"{a} {leaf}"
+            break  # the nearest informative parent decides
+    return leaf
 
 
 def safe_field(namer: Namer, f: str, path: list | None) -> str:
@@ -57,8 +91,8 @@ def safe_field(namer: Namer, f: str, path: list | None) -> str:
     return s or "_value"
 
 
-def make_unit(doc_id: str, fld: Optional[str], text: str) -> Unit:
-    return Unit(doc_id, fld, header_of(fld) if fld else "", text, normalize(text))
+def make_unit(doc_id: str, fld: Optional[str], text: str, source: Optional[str] = None) -> Unit:
+    return Unit(doc_id, fld, header_of(fld, source) if fld else "", text, normalize(text))
 
 
 @dataclass
@@ -75,7 +109,7 @@ def process_doc(doc: Document, detectors: Sequence[Detector]) -> DocResult:
         units.append(make_unit(doc.doc_id, None, doc.text))
     for f, v in doc.fields.items():
         if v and v.strip():
-            units.append(make_unit(doc.doc_id, f, v))
+            units.append(make_unit(doc.doc_id, f, v, doc.source))
     spans: dict = {}
     meds: dict = {}
     for u in units:
