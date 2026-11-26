@@ -220,7 +220,7 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
     red, _gated, gate_stats = gate(red, results, cfg, mode="redact")
 
     # ---- 6. rebuild every file in its original format
-    renamer = Renamer(keys, detectors)
+    renamer = Renamer(keys, detectors, mem)
     used: set[str] = set()
     lines: list[dict] = []
     for e in entries:
