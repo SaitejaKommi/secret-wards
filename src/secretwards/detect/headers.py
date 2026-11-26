@@ -3,6 +3,7 @@ because exported tables often have shifted columns."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 import regex as re
 
@@ -31,6 +32,7 @@ _NONPERSON = re.compile(
 _SEX = re.compile(r"\bsex\b|gender|लिंग|\bm/f\b", re.I)
 
 
+@lru_cache(maxsize=8192)  # pure and called once per detector per cell with the same few dozen headers
 def hint_for(header: str) -> Hint:
     h = header.strip().lower()
     if not h:
