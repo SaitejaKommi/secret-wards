@@ -1,0 +1,2 @@
+toolkit commit copied from: 6c0a85a (2026-11-26)
+source: https://github.com/Reinforce-SST/Secret-Wards-ToolKit (MIT). dev/ (practice data, truth, attacker) deliberately NOT copied; clone the kit next to this repo.

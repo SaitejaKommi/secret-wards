@@ -1,24 +1,28 @@
 # Secret Wards: team guide (read this first)
 
-Track 3 of DevForge. Repo: https://github.com/SaitejaKommi/secret-wards (public). Lead: Saiteja Kommi. Friend A: detection. Friend B: output and security.
+Track 3 of DevForge. Repo: https://github.com/SaitejaKommi/secret-wards. Lead: Saiteja Kommi. Friend A: detection and attack. Friend B: FHIR, security, report, brief.
+
+**STEP 0 for every person and every AI tool: read `docs-wt/TOOLKIT.md` before anything else.** The organisers released an official kit with a strict output contract
+(`raksha.toml`, `main.py`, `RAKSHA_SECRET`, `sanitized/`, `report.json`, `records.jsonl`). Our code does not meet it yet. TOOLKIT.md lists every conflict and the plan (P0-P7).
+Never hardcode names or values from the practice data or its answer key. Never commit the kit's `dev/` folder (practice data, truth, attacker).
 
 ## 1. What the project does (5 lines)
-1. It reads messy hospital files (CSV, TSV, JSON, JSONL, TXT, XLSX) in English, Hindi and Hinglish. Broken files go to quarantine.
-2. It finds personal data (names, phones, dates, ABHA / insurance / MRN ids, e-mails, addresses) and removes it, but keeps medicines, doses, vitals, lab values and diagnoses.
-3. It decides which records belong to the same patient (never by name alone) and gives each patient one keyed pseudonym.
-4. It shifts dates per patient, makes ages and PIN codes coarser only where a group is too small, and measures re-identification risk with its own attack.
-5. A leak gate re-checks every output, then it writes CSV / JSON / TXT, a report and a quarantine index. No LLMs, no network, CPU only, same input gives same output.
+1. It reads messy hospital files (CSV, TSV, JSON, FHIR bundles, TXT; UTF-8, BOM, UTF-16, cp1252) in English, Hindi and Hinglish. Broken files are quarantined, never copied raw.
+2. It finds personal data (names, relatives, phones, Aadhaar, PAN, ABHA, MRN, addresses, dates) in cells, keys, headers, file names, metadata and free text, and removes it, but keeps medicines, doses, vitals, labs and diagnoses exactly.
+3. It decides which records are the same patient (never by name alone) and gives each patient one keyed pseudonym (from `RAKSHA_SECRET`).
+4. It shifts dates per patient, generalizes age and place only where needed, and checks risk against an attacker that holds a voter-style registry.
+5. It writes `sanitized/` (same paths and formats as the input), `report.json` and `records.jsonl`. No LLMs, no network, 2 CPUs, 4 GB, 15 minutes, same input and secret give the same bytes.
 
-**Data flow:** `ingest -> normalize -> detect -> name memory -> link -> pseudonymize -> generalize -> render -> leak gate -> export`.
-Stages talk only through the types in `src/secretwards/contracts.py` (do not change it without asking the lead).
-Code map: `src/secretwards/{ingest,normalize,detect,link,privacy,export,security}`, `synth/` (fake data with answer keys), `eval/` (scorer), `tests/`.
+**Data flow today (our code):** `ingest -> normalize -> detect -> name memory -> link -> pseudonymize -> generalize -> render -> leak gate -> export`.
+**Data flow needed (contract):** the same stages, then a *contract writer* that mirrors the input tree into `sanitized/`, redacts in place (no dropped rows, no new columns), writes SHA-256 `report.json` and `records.jsonl`.
+Stages talk only through `src/secretwards/contracts.py` (ask the lead before changing it).
 
 ## 2. Setup from a fresh clone (Python 3.11 needed)
 Windows (PowerShell):
 ```
 git clone https://github.com/SaitejaKommi/secret-wards.git
 cd secret-wards
-py -3.11 -m venv .venv
+python -m venv .venv          # must be Python 3.11; if you have the py launcher: py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 pip install -e .
@@ -28,37 +32,33 @@ python -m secretwards run --in data/synth/dev/in --out out/dev --emit-spans
 python -m eval --gold data/synth/dev/gold.json --out out/dev
 python -m pytest -q
 ```
-Linux / macOS: same, but `python3.11 -m venv .venv`, `source .venv/bin/activate`, and the paths already use `/`.
-Other splits: `--split heldout` and `--split blind` (different names, cities, templates, schemas). Docs worktree: `git worktree add docs-wt docs`.
-Always run the pipeline on the `.../in` folder, never on the folder that holds `gold.json`. Expected: `100 passed`, and `records_scored` above 0 in the eval output.
+Linux / macOS: same, but `python3.11 -m venv .venv`, `source .venv/bin/activate`.
+**Official kit (next to the repo, not inside):**
+```
+cd ..                                             # folder that contains secret-wards/
+git clone https://github.com/Reinforce-SST/Secret-Wards-ToolKit.git
+$env:RAKSHA_SECRET="practice"                     # PowerShell;  Linux: export RAKSHA_SECRET=practice
+python Secret-Wards-ToolKit/starter/main.py --input Secret-Wards-ToolKit/dev/input --output secret-wards/out/starter
+python Secret-Wards-ToolKit/validate_output.py --input Secret-Wards-ToolKit/dev/input --output secret-wards/out/starter   # CONTRACT OK
+python Secret-Wards-ToolKit/check_dev.py --output secret-wards/out/starter                                                # about 84% leaked: expected
+```
+Once the lead merges P0, our own run is `RAKSHA_SECRET=practice python main.py --input ../Secret-Wards-ToolKit/dev/input --output out/ours` followed by the same two checkers.
+Docs worktree: `git worktree add docs-wt docs`. Always run on an input folder, never on the folder holding answer keys. Expected: `100 passed`.
 
-## 3. Real status (measured 2026-11-26 on fresh seeds; synthetic data only, it does NOT predict the hidden set)
-| Set | PII recall | PII precision | Medical kept | Link precision | Link recall | Canary leaks |
-|---|---|---|---|---|---|---|
-| dev | 0.997 | 0.995 | 0.988 | 0.983 | 0.962 | 0/23 |
-| heldout names and templates | 0.997 | 0.996 | 0.989 | 1.000 | 0.857 | 0/23 |
-| blind names, templates, schemas | 0.995 | 0.977 | 0.992 | 0.996 | 0.597 | 0/23 |
-
-- "Medical kept" counts a generalized age as kept if its band contains the true age. Exact age is kept for only 13-42% of records.
-- Expected score if the hidden set behaves like ours: about 71 / 100 (range 58-78, partly a guess).
-- Missing: FHIR R4, encryption at rest, audit trail, technical report, stronger attack.
-
-**Open bugs (lead owns these, do not fix them in your branch):**
-1. Leak gate can quarantine many records because of one misclassified cell (20 of 1034 on one dev set). Files: `detect/rules.py`, `security/leak_gate.py`.
-2. Run time is quadratic for one big text file (15 s for 106 KB, a 4 MB file hangs). File: `detect/merge.py`.
-3. A failed run leaves partial output (not atomic). File: `pipeline.py`.
-4. Missed: phones like "9 8 7 6 5 0 1 2 4" or "(98765) 01240", "policy no X" without a colon. File: `detect/rules.py`.
-5. Same-name patients can merge when they share a father's name and birth year but have different phones. File: `link/compare.py`.
+## 3. Real status (measured 2026-11-26; details in TOOLKIT.md section 7)
+- Our synthetic data (own generator, does NOT predict the hidden set): PII recall 0.995-0.997, precision 0.977-0.996, medical kept 0.988-0.992, link precision 0.98-1.0, link recall 0.60-0.96, canaries 0/23.
+- Official practice data, kit starter: CONTRACT OK, 84.1% leaked, 4/4 canaries, score about 8.
+- Official practice data, our pipeline: **contract NOT met** (no `sanitized/`, no SHA-256 report, no `records.jsonl`, no `raksha.toml`); the leak gate quarantined 382 of 1,209 records.
+  Through a measurement-only adapter our detection leaked 4.7% (PAN 95%, Aadhaar 31%, MRN 9%, village 12%, metadata 38%) and kept 77.8% of medical values (lost to quarantine). Linking not measured.
+- Known bugs (lead): gate over-quarantine, quadratic time on one big text file, non-atomic output, a few phone/ID misses, same-name merges when phones differ.
 
 ## 4. Git workflow (everyone)
-- Never commit to `main` directly. Friend A: branch `feat/detection`. Friend B: branch `feat/output-security`.
-  `git checkout main && git pull && git checkout -b feat/detection`
-- Commit from your OWN GitHub account (check `git config user.name` and `user.email` before the first commit). Small commits, honest messages
-  ("add diagnosis canonical map", not "update"). Never rewrite or force-push shared history.
-- Before every pull request: `python -m pytest -q` must pass, and re-run the scorer on dev and blind and paste the numbers in the PR text.
-- Open a pull request into `main`. The lead reviews and merges. Keep PRs under about 400 changed lines.
-- Update your sections of `docs-wt/PROGRESS.md` on the `docs` branch after each finished task (`cd docs-wt && git add -A && git commit && git push`).
-- NEVER commit: `keys/`, `*.key`, `data/`, `out/`, `.venv/`, caches. `.gitignore` covers them; check `git status` before every commit.
+- Never commit to `main` directly. Friend A: branch `feat/detection`. Friend B: branch `feat/output-security`. Lead: `feat/contract` for P0.
+- Commit from your OWN GitHub account (check `git config user.name` and `user.email` before the first commit; use your GitHub noreply email). Small commits, honest messages. Never rewrite or force-push shared history.
+- Before every PR: `python -m pytest -q` green; run the scorer on dev and blind; once P0 is merged also run the kit's `validate_output.py` and `check_dev.py`; paste the numbers in the PR text.
+- Update your rows in `docs-wt/PROGRESS.md` on the `docs` branch after each finished task (`cd docs-wt && git add -A && git commit && git push`).
+- NEVER commit: `keys/`, `*.key`, `data/`, `out/`, `.venv/`, caches, the kit's `dev/`, any answer key or attacker file, anything that holds `RAKSHA_SECRET`. `.gitignore` covers most of it; read `git status` before every commit.
+
 ### Pull request steps (copy these)
 ```
 git fetch origin
@@ -68,101 +68,82 @@ python -m pytest -q
 git push -u origin feat/detection
 gh pr create --base main --head feat/detection --title "short title" --body "what changed; test result; scorer numbers before/after"
 ```
-- You need to be added as a collaborator first (lead: GitHub repo, Settings, Collaborators). Accept the invitation, then clone.
-- Keep your branch current with `git fetch origin && git merge origin/main` (a merge commit is fine). Do not rebase or force-push anything already pushed.
-- One topic per PR. Do not edit files owned by the other friend or the lead (see your section). If you must, ask in the PR first.
-- The lead reviews and merges; nobody pushes to `main`. Only the lead merges `feat/*` into `main`.
-- If a PR touches `src/secretwards/contracts.py` it will not be merged without the lead's explicit OK.
+- The lead adds you as a collaborator (GitHub repo, Settings, Collaborators). Accept the invitation, then clone.
+- Keep your branch current with `git fetch origin && git merge origin/main`. Do not rebase or force-push anything already pushed.
+- One topic per PR (under about 400 changed lines). Do not edit files owned by someone else (section 8). If you must, ask in the PR first. Only the lead merges to `main`.
+- A PR that touches `src/secretwards/contracts.py` is not merged without the lead's explicit OK.
+- Rules that cannot be broken: no LLMs or generative models, no model over 50M parameters (declare any model in README), no network at run time, deterministic output, fake data only,
+  no PII or `RAKSHA_SECRET` in logs, errors, tests or docs, no hardcoding to our own or the practice names/values, fail closed (quarantine whole files you cannot clean; never drop records silently).
+- New dependency: ask the lead, pin the exact version in `requirements.txt` and `pyproject.toml`. The run environment is Linux; check wheels exist.
 
-- Rules that cannot be broken: no LLMs or generative models, no model over 50M parameters, no network at run time, deterministic output,
-  no real personal data anywhere (fake data only), no PII in logs, errors, tests or docs, no hardcoding to our own fake names or templates,
-  fail closed (quarantine when unsure).
-- Adding a dependency: ask the lead first, pin the exact version in `requirements.txt` and `pyproject.toml`.
-
-## 5. Friend A: detection, diagnosis mapping, stronger attack, CRF last
-**Why it matters:** diagnosis words come in many spellings (English, Hinglish, Hindi, OCR typos): 227 different strings for about 75 real
-diagnoses. That breaks the privacy grouping and is why most ages get coarsened. A better attack and a CRF raise the privacy and detection scores.
-
-**Files you may touch:** new `src/secretwards/detect/diagnosis.py`; `src/secretwards/privacy/generalize.py` and `privacy/risk.py`
-(you own these two); new `src/secretwards/privacy/attack.py`; new `src/secretwards/detect/crf/` (code and a small trained model file under
-2 MB); `src/secretwards/detect/__init__.py` (only the `default_detectors()` list); new tests `tests/test_diagnosis.py`, `tests/test_attack.py`,
-`tests/test_crf.py`; `synth/` only to ADD new templates or splits (never edit existing gold logic to raise a score).
-**Files NOT to touch:** `contracts.py`, `pipeline.py`, `link/*`, `export/*`, `security/*`, `detect/rules.py`, `detect/merge.py`, `detect/names.py`
-(the lead is editing these), and anything under `docs-wt/` except PROGRESS.md.
-
+## 5. Friend A: detection and attack (plan steps P2 and P4)
+**Why:** detection is 20 points and every surviving identifier costs -1 (canary -3); privacy is 25 points and is judged by the organisers' attacker.
+**Files you own (new files, to avoid conflicts):** `src/secretwards/detect/india_ids.py` (Aadhaar 12 digits with any separators/Devanagari digits, masked Aadhaar, PAN, ABHA, UHID/MRN styles, insurance),
+`detect/address_fields.py` (village, locality/mohalla, house, landmark, PIN, tehsil/district, by context and by column meaning), `detect/hidden.py` (base64/hex/entity decoding, metadata and `source_path` rules, JSON keys, file-name PII),
+`detect/diagnosis.py` (canonical diagnosis key), `privacy/attack.py` (stand-in attacker), `privacy/generalize.py` and `privacy/risk.py` (you own these), later `detect/crf/`. Register detectors only in `detect/__init__.py` `default_detectors()`. Tests: `tests/test_india_ids.py`, `tests/test_address_fields.py`, `tests/test_hidden.py`, `tests/test_attack.py`.
+**Files NOT to touch:** `contracts.py`, `pipeline.py`, `main.py`, `contract/*`, `link/*`, `export/*`, `fhir/*`, `security/*`, `detect/rules.py`, `detect/merge.py`, `detect/names.py` (lead), `eval/*`.
 **Steps in order:**
-1. **Diagnosis mapping.** Build a canonical diagnosis finder: map English / Hinglish / Hindi / typo variants to one key (lexicon + fuzzy match with
-   `rapidfuzz`, transliteration helpers exist in `normalize/translit.py`). Use the key in `privacy/generalize.py` (`extract_facts` and `qi_key`) so groups
-   stop fragmenting. Do not change the released diagnosis text, only the grouping key.
-2. **Stronger attack.** Implement `contracts.RiskAttack` in `privacy/attack.py` and call it from `privacy/risk.py`. Add what an attacker could know:
-   admission date window (we shift dates by 30-365 days), ward, length of stay, drug combination. Report unique-match rate and mean risk for raw data
-   versus release, in `report.json` under `privacy`. Keep the existing numbers so we can compare.
-3. **Tune the privacy trade-off** with the new grouping: goal is more exact ages kept while the attack stays low. Show a before/after table.
-4. **CRF last.** Add a name tagger behind `contracts.Detector` using `sklearn-crfsuite` (ask the lead before adding it). Train on `dev` data from several seeds
-   (`python -m synth --split dev --seed N`), never on `blind`. Features: word shape, prefix/suffix, neighbours, gazetteer flag, script. Goal: catch names with
-   no cue (lowercase Hinglish, Devanagari). Register it in `default_detectors()`. Keep it deterministic (fixed seed, fixed feature order) and make the model file load offline.
-**Definition of done:** tests pass; dev and blind scores do not get worse (PII recall, precision, medical kept, link precision); diagnosis classes in
-a 1500-patient run drop from about 227 strings to under 100; exact-age-kept goes up with unique-match rate not worse than 2x today's (0.8% at 1500 patients);
-CRF raises recall on the hand probes for unlabeled lowercase/Devanagari names (ask the lead for `probe2`); PR text has the numbers.
+1. **Indian IDs and address fields** (biggest leaks today: PAN, Aadhaar, MRN, village, locality, metadata). Use `check_dev.py` per-type rows to prioritise. Write rules that understand *context* (a label, a column meaning), not lists of practice values: hidden data has unseen labels, column names and formats.
+2. **Hidden places:** base64 attachments (decode, clean, re-encode), JSON keys, metadata, file names. Leak scoring decodes base64, hex, `\uXXXX`, entities and folds homoglyphs, so do the same when detecting.
+3. **Meaning traps:** keep `Dr. <name>`, `C/O fever`, `K/C/O`, `h/o`, wards, doses, `1-0-1`, eponyms; remove relatives (S/o, W/o, C/O <name>).
+4. **Stand-in attacker** in `privacy/attack.py` from the kit's `docs/ATTACKS.md` and `dev/attacker/` (registry linkage A2/A3, profile A4, targeted A5 with global-shift recovery, pseudonym inversion A6). Report risk raw vs sanitized in `report.json` under `privacy`.
+5. **Tune generalization** against that attacker and the kit's utility formulas (5-year bands 0.9, village to tehsil/district 0.7-0.8, rare-value suppression only for rare combinations); diagnosis canonical key so groups stop fragmenting.
+6. **CRF last** (`sklearn-crfsuite`, ask the lead first) for names with no cue; train only on our synthetic `dev` data and never on practice answers you will test on.
+**Definition of done:** tests pass; on practice data PAN and Aadhaar leaks under 2%, village/locality/house/landmark under 5%, metadata and base64 under 5%, name leaks do not rise; medical values kept does not fall; the stand-in attacker shows a lower success than raw; numbers in the PR.
 
-**Ready-to-paste prompt for your AI tool (Friend A):**
+**Ready-to-paste prompt (Friend A):**
 ```
-You are helping on the Secret Wards repo (hackathon Track 3: offline, LLM-free de-identification and record linkage for English/Hindi/Hinglish hospital
-records). Read CLAUDE.md, README.md and docs-wt/FRIEND_TASKS.md section 5 first. I am Friend A (detection). Work only on branch feat/detection.
-Rules: no LLMs or generative models, no model above 50M parameters, no network at run time, deterministic output, synthetic data only, no PII in logs/tests/docs,
-no hardcoding to our synthetic names or templates, never edit gold data to improve a score, never commit keys/ data/ out/ .venv/. Do not change
-src/secretwards/contracts.py, pipeline.py, link/, export/, security/, detect/rules.py, detect/merge.py, detect/names.py. Do these in order, one small commit each:
-(1) detect/diagnosis.py canonical diagnosis mapping used by privacy/generalize.py grouping; (2) privacy/attack.py stronger re-identification attack
-implementing contracts.RiskAttack, reported in report.json; (3) tune k-anonymity trade-off; (4) last, a CRF name detector behind contracts.Detector
-(ask me before adding sklearn-crfsuite). After each step run: python -m pytest -q and the scorer on dev and blind
-(python -m synth --split blind --seed 7 --n 300; python -m secretwards run --in data/synth/blind/in --out out/blind --emit-spans;
-python -m eval --gold data/synth/blind/gold.json --out out/blind), and show me the numbers before and after. Stop and ask if a design choice is unclear
-or a bug survives two attempts.
+You are helping on the Secret Wards repo (hackathon Track 3: offline, LLM-free de-identification and record linkage for English/Hindi/Hinglish hospital records).
+FIRST read CLAUDE.md, then docs-wt/TOOLKIT.md (the official kit and output contract), then docs-wt/FRIEND_TASKS.md section 5. I am Friend A (detection and attack). Work only on branch feat/detection.
+Rules: no LLMs or generative models, no model above 50M parameters, no network at run time, deterministic output, fake data only, never hardcode names or values from the practice data or its answer key,
+never commit keys/ data/ out/ .venv/ or the kit's dev/ folder, no PII or RAKSHA_SECRET in logs/tests/docs. Do not change contracts.py, pipeline.py, main.py, contract/, link/, export/, fhir/, security/,
+detect/rules.py, detect/merge.py, detect/names.py. Add new detector files (detect/india_ids.py, detect/address_fields.py, detect/hidden.py, detect/diagnosis.py) and register them only in detect/__init__.py.
+Do these in order, one small commit each: (1) Aadhaar/PAN/MRN/village/locality/house/landmark/DOB detection by context; (2) hidden places (base64, metadata, JSON keys, file names);
+(3) meaning traps; (4) privacy/attack.py stand-in attacker from the kit's docs/ATTACKS.md; (5) tune generalization against it; (6) last, a CRF (ask me before adding sklearn-crfsuite).
+After each step run python -m pytest -q, the synthetic scorer, and the kit checkers on the practice data (python ../Secret-Wards-ToolKit/check_dev.py --output <out>) and show me numbers before and after.
+Stop and ask if a design choice is unclear or a bug survives two attempts.
 ```
 
-## 6. Friend B: FHIR R4, encryption wiring, audit trail, report, demo
-**Why it matters:** the brief requires FHIR R4 output (Patient, Encounter, Observation, MedicationRequest), encryption at rest, an audit trail and a short technical
-report. None exist yet; they are worth points in "Output quality" and the security part of the deliverables.
-
-**Files you may touch:** new `src/secretwards/export/fhir.py` and `export/__init__.py`; `src/secretwards/security/vault.py`, new
-`security/audit.py`, `security/safe_log.py`; new tests `tests/test_fhir.py`, `tests/test_vault.py`, `tests/test_audit.py`; `README.md` (setup/demo parts only);
-new `scripts/demo.sh` / `scripts/demo.ps1`; on the docs branch: `docs-wt/REPORT.md` (the technical report) and your part of PROGRESS.md.
-`pipeline.py`: only AFTER the lead merges the "atomic output" change; then add one clearly marked block that calls your exporter and audit log.
-**Files NOT to touch:** `contracts.py`, `detect/*`, `link/*`, `privacy/*`, `ingest/*`, `normalize/*`, `eval/*`.
-
+## 6. Friend B: FHIR-aware sanitizer, security, report, brief (plan steps P3, P6, P7)
+**Why:** the kit gives integrity 10 points (format, schema, FHIR validity, report honesty, channel hygiene) and every JSON/FHIR file must stay valid. Note the change: we need a FHIR-aware *sanitizer* that edits the input Bundle in place, not a new FHIR exporter.
+**Files you own:** new package `src/secretwards/fhir/` (`sanitize.py`, `validate.py`), `src/secretwards/security/vault.py`, `security/audit.py`, `security/safe_log.py`, tests `tests/test_fhir.py`, `tests/test_vault.py`, `tests/test_audit.py`, `tests/test_contract_hygiene.py`, `README.md` (setup/architecture/limitations parts), `docs/brief.pdf` plus its source `docs-wt/BRIEF.md`, `scripts/demo.*`, `.github/workflows/ci.yml` (Linux CI running pytest, the kit starter checks and our contract path).
+**Files NOT to touch:** `contracts.py`, `pipeline.py`, `main.py`, `contract/*`, `detect/*`, `link/*`, `privacy/*`, `ingest/*`, `normalize/*`, `eval/*`.
+**Interface (agree with the lead before coding):** `fhir/sanitize.py` exposes `sanitize_bundle(bundle: dict, ctx) -> dict`, where `ctx.redact(text, field_hint) -> str`, `ctx.shift_date(value: str) -> str` (same syntax: date, dateTime, instant), `ctx.pseudonym(key) -> str` are supplied by the lead's contract writer. The function must keep resource ids and every `reference` resolvable inside the Bundle, keep value types and valid R4 syntax, clean `meta.source`, `identifier`, narrative `text.div`, extensions and base64 attachments, and never add or drop entries.
 **Steps in order:**
-1. **FHIR R4.** Implement `contracts.Exporter` in `export/fhir.py`. Input is `RedactedRecord` (it has `pseudonym`, `fields`, `text`, and `meta` with age band, sex,
-   PIN prefix). Produce Patient, Encounter, Observation and MedicationRequest bundles. Parse vitals, labs, drugs, dose, frequency and duration from the
-   already-redacted text/fields with regexes (similar patterns exist in `detect/medical_guard.py`; you may import them). Use only the pseudonym as identifier.
-   Validate with `fhir.resources` (ask the lead before adding it; pin the version) and add a test that validates a sample bundle. Output goes to `OUT/fhir/`.
-2. **Encryption wiring.** `AesGcmVault` exists but nothing uses it. Use it for: optional encrypted copies of quarantined input files (config switch), and
-   document exactly what is on disk and what is encrypted. Keys come from `keys/enc.key` (separate file per purpose, never printed). Add key-rotation notes.
-   Test: round trip, wrong key fails, tamper fails, no plaintext of a planted fake value in the encrypted file.
-3. **Audit trail.** Add `security/audit.py`: an append-only log of events (run start, file quarantined, counts, leak-gate repairs) with only ids, counts and
-   reason codes, never values. Chain entries with HMAC so tampering is detectable. Test that a planted fake value never appears.
-4. **Technical report** `docs-wt/REPORT.md` (about 2-3 pages): detection engine, linkage and pseudonyms, privacy layer with the measured risk, output formats,
-   security architecture (be honest about what is not encrypted), limits. Use the real numbers from `PROGRESS.md`.
-5. **Demo.** A script that generates fake data, runs the pipeline, shows the before/after of one record (fake data only), the report, and the attack numbers.
-**Definition of done:** `python -m pytest -q` passes; `OUT/fhir/` bundles validate; a test proves vault and audit work; the audit log and encrypted files contain no
-planted fake value; README demo steps work from a fresh clone on Windows and Linux; REPORT.md merged on the `docs` branch.
+1. **FHIR sanitizer** with a structural validator in `fhir/validate.py` (resource types, ids, required elements, references resolve, date syntax, base64) mirroring the kit's description in `toolkit/docs/SCORING.md` (section 5). Test on synthetic bundles you write yourself, plus the kit's 19 practice bundles locally (never committed).
+2. **Security design that is true:** the pipeline writes no raw or intermediate data, so document that and keep `RAKSHA_SECRET` handling safe (never written). If we later write any spill file, encrypt it with `AesGcmVault` using a key derived from the secret. Add `security/audit.py` (HMAC-chained event log: ids, counts, codes only) only if time allows; the brief needs an honest security section more than code.
+3. **Channel hygiene tests** on the contract path: stdout, stderr, `logs/`, report, records, output file names, TMPDIR/HOME contain no planted canary or secret (`tests/test_contract_hygiene.py`).
+4. **CI on Linux** (`.github/workflows/ci.yml`): install from `requirements.txt`, run pytest, run the kit starter checks, run our contract path twice (determinism) and with a different secret (must differ). The run environment is Linux, and we only develop on Windows.
+5. **README and the 2-page Project Brief PDF** (`toolkit/brief/PROJECT_BRIEF_TEMPLATE.md`; at most 2 pages A4, 10 pt or larger) with measured numbers from `check_dev.py` and the stand-in attacker; keep limitations honest.
+**Definition of done:** tests and CI green; bundles validate and references resolve after sanitising; the dates in sanitised FHIR parse as valid R4; hygiene tests pass; `docs/brief.pdf` is 2 pages and uses real measured numbers.
 
-**Ready-to-paste prompt for your AI tool (Friend B):**
+**Ready-to-paste prompt (Friend B):**
 ```
-You are helping on the Secret Wards repo (hackathon Track 3: offline, LLM-free de-identification and record linkage for English/Hindi/Hinglish hospital
-records). Read CLAUDE.md, README.md and docs-wt/FRIEND_TASKS.md section 6 first. I am Friend B (output and security). Work only on branch feat/output-security.
-Rules: no LLMs, no network at run time, deterministic output, synthetic data only, no PII in logs/tests/docs, never commit keys/ data/ out/ .venv/. Do not change
-src/secretwards/contracts.py, detect/, link/, privacy/, ingest/, normalize/, eval/. Do these in order, one small commit each: (1) export/fhir.py implementing
-contracts.Exporter, producing valid FHIR R4 Patient, Encounter, Observation and MedicationRequest from RedactedRecord (use only the pseudonym as identifier; ask me before
-adding fhir.resources and pin its version); (2) wire security/vault.py (AES-GCM) for optional encrypted quarantine copies and document what is on disk;
-(3) security/audit.py append-only HMAC-chained audit log with ids/counts/codes only; (4) docs-wt/REPORT.md technical report using real numbers; (5) a demo script.
-Each step needs tests. Edit pipeline.py only after I tell you the atomic-output change is merged, and only add one marked block. Run python -m pytest -q after
-each step. Stop and ask if a design choice is unclear or a bug survives two attempts.
+You are helping on the Secret Wards repo (hackathon Track 3: offline, LLM-free de-identification and record linkage for English/Hindi/Hinglish hospital records).
+FIRST read CLAUDE.md, then docs-wt/TOOLKIT.md (the official kit and output contract), then docs-wt/FRIEND_TASKS.md section 6. I am Friend B (FHIR, security, report, brief). Work only on branch feat/output-security.
+Rules: no LLMs, no network at run time, deterministic output, fake data only, never hardcode names or values from the practice data or its answer key, never commit keys/ data/ out/ .venv/ or the kit's dev/ folder,
+no PII or RAKSHA_SECRET in logs/tests/docs. Do not change contracts.py, pipeline.py, main.py, contract/, detect/, link/, privacy/, ingest/, normalize/, eval/.
+Do these in order, one small commit each: (1) fhir/sanitize.py + fhir/validate.py: sanitize a FHIR R4 Bundle IN PLACE (ids, references, meta.source, identifiers, narrative, attachments; shift dates in valid syntax through ctx.shift_date) per the interface in section 6;
+(2) honest security design and, only if needed, AES-GCM for any spill file; (3) tests that no canary or secret appears in stdout/stderr/logs/report/records/file names/TMPDIR; (4) Linux CI workflow; (5) README and the 2-page brief PDF with measured numbers.
+Each step needs tests. Run python -m pytest -q after each step. Stop and ask if a design choice is unclear or a bug survives two attempts.
 ```
 
-## 7. Lead (Saiteja) task list, in order
-1. Fix gate over-quarantine (`detect/rules.py`, `security/leak_gate.py`). 2. Fix quadratic merge (`detect/merge.py`) and add a perf test.
-3. Atomic output (`pipeline.py`). 4. Phone / ID pattern gaps (`detect/rules.py`). 5. Stop same-name merges when phones differ (`link/compare.py`).
-6. Review and merge PRs; keep `PROGRESS.md` current. Decisions still open: age accuracy versus attack resistance (`qi_include_dx`), keys folder outside the project for the real run.
+## 7. Lead (Saiteja): plan steps P0, P1, P5
+- **P0 contract adapter (`feat/contract`):** `raksha.toml`, root `main.py`, new package `src/secretwards/contract/` (keys derived from `RAKSHA_SECRET` by HKDF, mirror writer, in-place redaction, SHA-256 report, `records.jsonl`, atomic output, exit codes), changes to `pipeline.py`, `ingest/*`, `export/*`. Stop quarantining records; keep quarantining whole unprocessable files.
+- **P1:** gate over-quarantine (`detect/rules.py`, `security/leak_gate.py`), quadratic merge (`detect/merge.py`), perf test, atomic output.
+- **P5 identity:** pseudonym inside the record, `records.jsonl` locators, `null` when evidence is weak, homonym tests (`link/*`).
+- Review and merge PRs; keep `PROGRESS.md` current; decisions open: age accuracy vs attack resistance (`qi_include_dx`), public repo timing, who writes which part of the brief.
 
-## 8. Quick checks before you push
-`git status` shows only your files; `git diff --stat main` is small; `python -m pytest -q` is green; no key, data, out or personal path in the diff.
+## 8. Who owns which file (avoid conflicts)
+| Area | Owner |
+|---|---|
+| `contracts.py` | frozen; lead only |
+| `pipeline.py`, `main.py`, `raksha.toml`, `contract/*`, `ingest/*`, `export/*` | Lead |
+| `detect/rules.py`, `detect/merge.py`, `detect/names.py`, `detect/address.py`, `detect/lexicon.py`, `security/leak_gate.py`, `link/*` | Lead |
+| `detect/india_ids.py`, `detect/address_fields.py`, `detect/hidden.py`, `detect/diagnosis.py`, `detect/crf/*`, `privacy/*` | Friend A |
+| `fhir/*`, `security/vault.py`, `security/audit.py`, `security/safe_log.py`, CI workflow, README, brief | Friend B |
+| `synth/*`, `eval/*`, `tests/*` | each owner for their own new test files; lead for existing ones |
+| `docs-wt/*` | lead; everyone updates their own rows in PROGRESS.md |
+
+## 9. Quick checks before you push
+`git status` shows only your files; `git diff --stat main` is small; `python -m pytest -q` is green; no key, data, out, kit `dev/`, answer key or personal path in the diff; the kit checkers do not get worse.

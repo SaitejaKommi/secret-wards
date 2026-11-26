@@ -3,6 +3,13 @@
 Newest log entry on top. Repo: https://github.com/SaitejaKommi/secret-wards (public). Branches: `main` (code), `docs` (this folder, worktree `docs-wt/`).
 Team tasks and setup: see `FRIEND_TASKS.md`. Figures below were measured by running the code on synthetic data; they do not predict the hidden set.
 
+## READ FIRST: official kit changes the target (2026-11-26)
+The organisers' kit (https://github.com/Reinforce-SST/Secret-Wards-ToolKit, copy of its docs in `toolkit/`, analysis in `TOOLKIT.md`) defines a strict contract: `raksha.toml`, `main.py`,
+`RAKSHA_SECRET`, `sanitized/` mirror, `report.json` with SHA-256 per input file, `records.jsonl`. **Our code does not meet it yet** (measured: `validate_output.py` crashes on our report; `check_submission.py` fails on
+missing `raksha.toml`; our leak gate quarantined 382 of 1,209 records on the practice data). Plan P0-P7 and every conflict are in `TOOLKIT.md`. Official numbers on the practice data (kit starter): CONTRACT OK, 84.1% leaked.
+Status of the plan (lead OK needed before code changes): P0 contract adapter [ ], P1 gate + quadratic merge [ ], P2 India IDs / address fields / hidden places [ ] (Friend A), P3 FHIR-aware sanitizer [ ] (Friend B),
+P4 stand-in attacker + tuning [ ] (Friend A), P5 identity in `records.jsonl` [ ] (lead), P6 channel hygiene + security design [ ] (Friend B), P7 README + 2-page brief + public repo [ ] (Friend B + lead).
+
 ## Core (lead)
 - [x] M0 Skeleton, contracts (unchanged since M2), config, key handling, git repo (`main` @ 3e900b3)
 - [x] M1 Synthetic generator (dev / heldout / blind splits) with gold labels; scorer
@@ -13,8 +20,8 @@ Team tasks and setup: see `FRIEND_TASKS.md`. Figures below were measured by runn
 - [ ] Audit fixes (all still OPEN, verified by re-running on 2026-11-26): gate over-quarantine, quadratic merge, atomic output, phone/ID gaps, same-name merges
 
 ## Teammates
-- [ ] Friend A (branch `feat/detection`): diagnosis mapping, stronger attack, CRF last
-- [ ] Friend B (branch `feat/output-security`): FHIR R4, encryption wiring, audit trail, technical report, demo
+- [ ] Friend A (branch `feat/detection`): India ID / address-field / hidden-place detectors, stand-in attacker, diagnosis key, CRF last (see FRIEND_TASKS.md section 5)
+- [ ] Friend B (branch `feat/output-security`): FHIR-aware sanitizer, honest security design, hygiene tests, Linux CI, README and 2-page brief (section 6)
 
 ## Metrics (synthetic; fresh seeds 991 / 992 / 993, audit of 2026-11-26)
 Leak = share of gold PII strings still in the same record's output. Medical kept counts a generalized age as kept when its band holds the true age.
@@ -34,7 +41,7 @@ Leaked: unseen lowercase name without cue; unseen Devanagari name without cue; p
 Removed correctly: Title Case unseen names, names after Mr / bed-list / kin terms, 8 other phone formats, e-mails incl. "at/dot", unusual dates, villages and society addresses, ABHA and short reg numbers.
 
 ## What is NOT done
-FHIR R4 export; encryption at rest (key and vault exist, unused; the pipeline writes no raw or intermediate data to disk, only redacted outputs); audit trail; access separation;
+The whole output contract (see top); FHIR-aware sanitizing (the kit needs valid FHIR in place, not an export); encryption at rest (key and vault exist, unused; the pipeline writes no raw or intermediate data to disk, only redacted outputs); audit trail; access separation;
 technical report; CRF; stronger attack. Exact ages kept for only 13-42% of records (diagnosis spelling variants fragment the privacy groups).
 
 ## History of bad numbers (kept on purpose)
@@ -56,3 +63,4 @@ technical report; CRF; stronger attack. Exact ages kept for only 13-42% of recor
 ## Log
 **2026-11-26 audit + first commit.** Re-ran everything on fresh seeds, wrote adversarial probes, found the issues above; created the git repo, `docs` branch and this worktree; wrote `FRIEND_TASKS.md`; README matches reality.
 **2026-11-26 M5 / M4 / M3 / M2 / M1 / M0.** See `ARCHITECTURE.md` for the design as built.
+**2026-11-26 toolkit.** Cloned the official kit next to the repo and read all of its docs and code before running anything. Ran the starter (CONTRACT OK, 84.1% leaked), our pipeline (no crash, wrong layout, 382 records quarantined by our own gate), `validate_output.py` (crashes on our report), `check_submission.py` static (raksha.toml missing), and `check_dev.py` through a measurement-only adapter (4.7% leaked, 77.8% medical kept, linking not measurable). Wrote `TOOLKIT.md`, copied the kit docs to `toolkit/` (no data/truth/attacker), re-split `FRIEND_TASKS.md` around the contract. No source code changed.
