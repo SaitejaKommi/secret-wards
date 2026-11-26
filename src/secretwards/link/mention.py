@@ -102,8 +102,8 @@ def build_mention(doc: Document, units, spans, meds) -> Mention:
                     if len(k) >= 3:
                         place.append(k)
             elif t == PIIType.DATE:
-                nd = ocr_digit_view(normalize(raw).text)
-                dm = find_dates(nd)
+                plain = normalize(raw).text
+                dm = find_dates(plain) or find_dates(ocr_digit_view(plain))  # plain first: the OCR view breaks month names
                 if not dm:
                     continue
                 d0 = dm[0]

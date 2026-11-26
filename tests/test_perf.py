@@ -31,7 +31,10 @@ def _reference_merge(spans, meds, text):
     from secretwards.detect.merge import _NUMERIC_GUARDED, _PRIO, _TEXT_GUARDED, _overlap
 
     kept = []
+    date_extents = {(x.start, x.end) for x in spans if x.type == PIIType.DATE}
     for s in spans:
+        if s.type in (PIIType.ID, PIIType.MRN) and s.score <= 0.9 and (s.start, s.end) in date_extents:
+            continue
         if s.type in _TEXT_GUARDED:
             ln = max(1, s.end - s.start)
             cov = sum(_overlap(s.start, s.end, a, b) for a, b, k in meds if k in (MedKind.DRUG, MedKind.LAB, MedKind.VITAL, MedKind.DOSE))

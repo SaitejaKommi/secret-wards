@@ -69,8 +69,12 @@ def merge(spans: Sequence[Span], meds: Sequence[tuple[int, int, MedKind]], text:
         i = bisect.bisect_right(u_starts, s0) - 1
         return i >= 0 and uuids[i][1] >= s1
 
+    # a token that is exactly a date ("JAN-05-1958" also looks like PREFIX-digits) is a date, not a hospital number
+    date_extents = {(x.start, x.end) for x in spans if x.type == PIIType.DATE}
     kept: list[Span] = []
     for s in spans:
+        if s.type in (PIIType.ID, PIIType.MRN) and s.score <= 0.9 and (s.start, s.end) in date_extents:
+            continue
         if uuids and s.type != PIIType.EMAIL and in_uuid(s.start, s.end):
             continue
         if s.type in _TEXT_GUARDED:
