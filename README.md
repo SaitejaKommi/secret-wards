@@ -24,7 +24,7 @@ Windows (PowerShell):
 ```
 git clone https://github.com/SaitejaKommi/secret-wards.git
 cd secret-wards
-py -3.11 -m venv .venv
+python -m venv .venv          # must be Python 3.11 (check: python --version); if you have the py launcher: py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 pip install -e .

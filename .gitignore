@@ -1,11 +1,12 @@
-docs-wt/
-data/
-out/
-keys/
+# Anchored to the repo root on purpose: an unanchored "data/" also hid src/secretwards/detect/gazetteer/data/
+/docs-wt/
+/data/
+/out/
+/keys/
 *.key
 .env
-.venv/
-KICKOFF.md
+/.venv/
+/KICKOFF.md
 __pycache__/
 *.pyc
 .pytest_cache/
