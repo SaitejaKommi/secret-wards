@@ -185,18 +185,25 @@ def safe_label(label: str, key: bytes) -> str:
 
 # ---------------------------------------------------------------- encoded runs
 _B64 = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{24,}={0,2}(?![A-Za-z0-9+/=])")
-_HEX = re.compile(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}){12,}(?![0-9A-Fa-f])")
+_HEX = re.compile(r"(?<![0-9A-Fa-f])(?:[0-9A-Fa-f]{2}){10,}(?![0-9A-Fa-f])")  # 10 bytes: a hex-encoded mobile number
 _UESC = re.compile(r"(?:\\u[0-9A-Fa-f]{4}){3,}")
 _ENT = re.compile(r"(?:&(?:#\d{1,7}|#[xX][0-9A-Fa-f]{1,6}|[A-Za-z]{2,8});){3,}")
 
 
 def _texty(s: str) -> bool:
-    """Decoded bytes look like human text (not a hash, id or binary)."""
+    """Decoded bytes look like human text or an encoded number (not a hash, id or binary).
+
+    Digits-only payloads count too: a phone or Aadhaar number hidden as hex / &#NN; / \\uXXXX decodes to digits.
+    Random bytes (hashes, ids) almost never decode to printable text with a 6-digit run."""
     if len(s) < 6:
         return False
     printable = sum(c.isprintable() or c in "\n\r\t" for c in s)
+    if printable / len(s) < 0.95:
+        return False
     letters = sum(c.isalpha() for c in s)
-    return printable / len(s) >= 0.95 and letters / len(s) >= 0.2 and bool(re.search(r"[\p{L}]{3,}", s))
+    wordy = letters / len(s) >= 0.2 and bool(re.search(r"[\p{L}]{3,}", s))
+    numbery = bool(re.search(r"\d{6,}", re.sub(r"[\s\-.()+]", "", s)))
+    return wordy or numbery
 
 
 def _decode_b64(tok: str) -> str | None:
