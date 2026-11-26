@@ -178,6 +178,14 @@ def _repair(rv: RawValues, text: str, seen: set | None = None, names: bool = Tru
         if any(w in rv.phones for w in _digit_windows(ds, 10)) or any(w in rv.abha for w in _digit_windows(ds, 14)):
             a, b = n.to_orig(ch.start(), ch.end())
             spans.append((a, b, "[ID]"))
+    if rv.alnum:  # an identifier (hospital number, Aadhaar, ...) found elsewhere in the run: remove it wherever it appears, however it is written
+        idx = [i for i, ch in enumerate(view) if "0" <= ch <= "9" or "A" <= ch <= "Z" or "a" <= ch <= "z"]
+        stream = "".join(view[i] for i in idx).upper()
+        for L_, vals in rv.alnum.items():
+            for k in range(0, max(0, len(stream) - L_ + 1)):
+                if stream[k:k + L_] in vals:
+                    a, b = n.to_orig(idx[k], idx[k + L_ - 1] + 1)
+                    spans.append((a, b, "[ID]"))
     spans.sort()
     out, pos = [], 0
     for a, b, rep in spans:
@@ -188,6 +196,17 @@ def _repair(rv: RawValues, text: str, seen: set | None = None, names: bool = Tru
         pos = b
     out.append(text[pos:])
     return "".join(out)
+
+
+def _blank_leaking_lines(rv: RawValues, text: str, names: bool = True) -> str:
+    """Last resort for a field that still leaks after repair: blank only the lines that leak, so the rest of a note (its medical content)
+    survives. If the leak cannot be isolated to lines (it spans them), the whole text is blanked, as before."""
+    out = []
+    for ln in text.splitlines(keepends=True):
+        body = ln.rstrip("\r\n")
+        out.append("[REDACTED]" + ln[len(body):] if scan(rv, body, names) else ln)
+    new = "".join(out)
+    return new if not scan(rv, new, names) else "[REDACTED]"
 
 
 def gate(records: dict[str, RedactedRecord], results, cfg, mode: str = "quarantine",
@@ -232,10 +251,10 @@ def gate(records: dict[str, RedactedRecord], results, cfg, mode: str = "quaranti
                 quarantined.append(QuarantineEntry(doc_id, QReason.LEAK_GATE, "record"))
                 continue
             if scan(rv, rec.text):
-                rec.text = "[REDACTED]"
+                rec.text = _blank_leaking_lines(rv, rec.text)
             for k in list(rec.fields):
                 if scan(rv, rec.fields[k], k not in exempt):
-                    rec.fields[k] = "[REDACTED]"
+                    rec.fields[k] = _blank_leaking_lines(rv, rec.fields[k], k not in exempt)
             stats["fields_blanked"] += 1
         kept[doc_id] = rec
     stats["distinct_name_words_repaired"] = len(repaired_words)  # a count only: the words are PII-adjacent
