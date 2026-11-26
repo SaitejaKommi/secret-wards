@@ -13,6 +13,7 @@ from typing import Sequence
 from ..contracts import Detector
 from ..detect import detect_unit
 from ..detect import lexicon as L
+from ..detect.headers import hint_for
 from ..pipeline import make_unit
 from ..security.keys import Keys, hmac_hex
 
@@ -20,6 +21,14 @@ _SPLIT = re.compile(r"[_\-\s.()\[\]]+")
 _DIGITS = re.compile(r"\d{6,}")
 _CHUNK = re.compile(r"[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)*")
 _IDLIKE = re.compile(r"[A-Za-z]{1,6}[-/]?\d{5,}")
+_LABEL_KINDS = frozenset({"phone", "dob", "sex", "date", "age", "pin", "email", "id", "address", "city", "name"})
+
+
+def _is_label(text: str) -> bool:
+    t = text.strip().lower()
+    return bool(t) and len(t.split()) <= 4 and not any(c.isdigit() for c in t) and hint_for(t).kind in _LABEL_KINDS
+
+
 _PLAIN_KEY = re.compile(r"[a-z]{3,24}")
 _SAFE_WORDS = (L.HEADER_WORDS | L.CLINICAL_WORDS | L.COMMON_WORDS)
 
@@ -49,6 +58,10 @@ class Renamer:
             if sum(c.isdigit() for c in chunk) >= 5 and any(c.isalpha() for c in chunk):
                 return True
         spaced = _SPLIT.sub(" ", text)
+        if not filename and self.memory is not None and self.memory.find(make_unit("x", None, re.sub(r"(?<=[a-z])(?=[A-Z])", " ", spaced)), []):
+            return True  # a word the run learned as a person's name (checked before the label shortcut)
+        if not filename and _is_label(text):
+            return False  # "Janm Tithi", "Mob.", "Ling": a column with a recognised meaning is a label, even if one word is also a given name
         # a plain lowercase word ("extension", "status", "telecom") is a schema term, not a person; without this the address
         # detector read FHIR's "extension" as a street type and every bundle got a renamed element
         schema_word = not filename and _PLAIN_KEY.fullmatch(text) is not None

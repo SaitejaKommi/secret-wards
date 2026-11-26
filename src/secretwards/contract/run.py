@@ -131,7 +131,7 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
             for path, val, _t in leaves:
                 if not val or len(val) < 4 or len(val) > 200:
                     continue
-                unit = make_unit("probe", path_name(path) or None, val)
+                unit = make_unit("probe", path_name(path) or None, val, "json")
                 spans, _m = detect_unit(unit, detectors)
                 if any(s.role != "doctor" and s.type in (PIIType.PHONE, PIIType.ABHA, PIIType.MRN, PIIType.EMAIL, PIIType.INSURANCE)
                        or (s.type == PIIType.NAME and s.role in ("patient", "relative")) for s in spans):
