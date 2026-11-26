@@ -13,6 +13,9 @@ from ..normalize.text import ocr_digit_view
 from .base import Collector
 from .headers import hint_for
 
+# resource references / UUIDs (FHIR urn:uuid:..., Patient/<uuid>) are record keys, not patient numbers
+_REFERENCE = re.compile(r"urn:uuid:|urn:oid:|\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
+_FACILITY_CTX = re.compile(r"(?<![\p{L}])(?:dr|doctor|mbbs|md|ms|dnb|bams|bhms|hospital|clinic|nursing\s+home|lab(?:oratory)?|pharmacy|drug|licen[sc]e|lic)(?![\p{L}])", re.I)
 _RUN = re.compile(r"[+(]?\d[\d\s\-.()]*\d")
 _EMAIL = re.compile(r"[\p{L}\d._%+\-]+@[\p{L}\d\-]+(?:\.[\p{L}\d\-]+)+")
 _ABHA = re.compile(r"(?<![\d])(?:\d{2}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4}|\d{4}\s\d{4}\s\d{4}\s\d{2}|\d{14})(?![\d])")
@@ -97,7 +100,12 @@ class RuleDetector:
             col.add(m.start(), m.end(), PIIType.MRN, 0.9)
         for m in _MRN_CUE.finditer(text):
             if any(c.isdigit() for c in m.group(1)):
-                col.add(m.start(1), m.end(1), PIIType.MRN, 0.85)
+                before = text[max(0, text.rfind("\n", 0, m.start()) + 1, m.start() - 45):m.start()]
+                if m.group(0)[:3].lower() == "reg" and _FACILITY_CTX.search(before):
+                    # a doctor's / hospital's / drug licence's registration number is not a patient number (still redacted, as an id)
+                    col.add(m.start(1), m.end(1), PIIType.ID, 0.7)
+                else:
+                    col.add(m.start(1), m.end(1), PIIType.MRN, 0.85)
         for m in _ID_GENERIC.finditer(text):
             col.add(m.start(), m.end(), PIIType.ID, 0.6)
         for m in _PIN_CUE.finditer(view):
@@ -122,7 +130,9 @@ class RuleDetector:
                 col.add(s0, e0, PIIType.PINCODE, 0.9)
             elif hint.kind == "id" and nd >= 3 and nd >= 0.3 * len(stripped) and stripped.count(" ") <= 1 \
                     and len(stripped) >= 4 and len(stripped) <= 40 \
-                    and not any(x.type in (PIIType.MRN, PIIType.ABHA, PIIType.INSURANCE, PIIType.ID) for x in col.spans):
+                    and not any(x.type in (PIIType.MRN, PIIType.ABHA, PIIType.INSURANCE, PIIType.ID) for x in col.spans) \
+                    and not any(x.type == PIIType.DATE and x.start <= s0 and x.end >= e0 for x in col.spans) \
+                    and not _REFERENCE.search(stripped):
                 col.add(s0, e0, PIIType.MRN, 0.7)
             elif hint.kind in ("date", "dob") and not any(x.type == PIIType.DATE for x in col.spans) \
                     and nd >= 4 and len(stripped) <= 30:

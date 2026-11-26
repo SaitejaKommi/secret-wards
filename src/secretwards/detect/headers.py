@@ -19,7 +19,7 @@ _NAME = re.compile(r"\bname\b|\bnaam\b|\bnm\b|नाम|^pt\b|\bpatient\b|\bpt\b
 _PHONE = re.compile(r"phone|mobile|contact|\btel\b|\bcell\b|whatsapp|मोबाइल|फोन|फ़ोन|संपर्क", re.I)
 _EMAIL = re.compile(r"e-?mail|ईमेल", re.I)
 _ADDR = re.compile(r"address|\baddr\b|residence|\bpata\b|पता|ghar|locality|village|mohalla|मोहल्ला", re.I)
-_CITY = re.compile(r"\bcity\b|\btown\b|district|शहर|जिला", re.I)
+_CITY = re.compile(r"\bcity\b|\btown\b|district|\bdistt\b|\bzila\b|\bjila\b|शहर|जिला", re.I)
 _PIN = re.compile(r"\bpin\b|pincode|\bzip\b|postal|पिन", re.I)
 _DOB = re.compile(r"\bdob\b|birth|d\.o\.b|जन्म", re.I)
 _DATE = re.compile(r"\bdate\b|\bdt\b|admit|admission|discharge|\bdoa\b|\bdod\b|तिथि|तारीख|भर्ती|छुट्टी|tareekh", re.I)
@@ -51,7 +51,7 @@ def hint_for(header: str) -> Hint:
         return Hint("address")
     if _CITY.search(h):
         return Hint("city")
-    if _ID.search(h):
+    if _ID.search(h) and not _DATE.search(h):  # "registration date" / "admission date" are dates, not ids
         return Hint("id")
     if _AGE.search(h) and not _SEX.search(h.replace("age/sex", "")):
         return Hint("age")

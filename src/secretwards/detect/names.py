@@ -87,6 +87,17 @@ def _is_deva(t: str) -> bool:
     return bool(_DEV.search(t))
 
 
+_ASHA_ROLE = {"worker", "workers", "didi", "karyakarta", "karyakartri", "sahyogini"}
+
+
+def _asha_role(toks: list[Tok], i: int) -> bool:
+    """\"ASHA worker\" / \"ASHA didi\" is a health-worker role (a meaning trap), not a person called Asha."""
+    t = toks[i].t.lower()
+    if t == "asha" and i + 1 < len(toks) and toks[i + 1].t.lower() in _ASHA_ROLE:
+        return True
+    return i > 0 and t in _ASHA_ROLE and toks[i - 1].t.lower() == "asha"
+
+
 def _veto(t: str, strong: bool) -> bool:
     w = t.lower().strip(".'’").removesuffix("'s").removesuffix("’s")
     if w in L.DRUG_WORDS:
@@ -112,6 +123,8 @@ def _nameish(text: str, toks: list[Tok], i: int, strong: bool, have_name: bool) 
         return False
     w = _letters(t)
     if _veto(t, strong):
+        return False
+    if _asha_role(toks, i):
         return False
     if len(w) == 1:  # initial: "R." or a bare capital next to another name token
         nxt = text[tk.e:tk.e + 1]
@@ -220,9 +233,9 @@ class NameDetector:
             after(m.end(), False, 0.85, "")
         for m in _PT_WEAK.finditer(text):
             after(m.end(), False, 0.8, "patient")
-        # 5. gazetteer
+        # 5. gazetteer (not in a city / district column: that cell holds a place, which the address detector owns)
         n = len(toks)
-        i = 0
+        i = 0 if hint.kind != "city" else n
         while i < n:
             t = toks[i].t
             if i in taken:
@@ -231,7 +244,7 @@ class NameDetector:
             hit = False
             if _is_deva(t):
                 hit = L.deva_gaz_name(t) and t not in L.HI_STOP
-            elif t[0].isalpha() and len(_letters(t)) >= 3 and L.is_gaz_name(t) and not _veto(t, False):
+            elif t[0].isalpha() and len(_letters(t)) >= 3 and L.is_gaz_name(t) and not _veto(t, False) and not _asha_role(toks, i):
                 hit = True
             if hit:
                 a = i
@@ -252,7 +265,7 @@ class NameDetector:
             if toks[k].t.lower() in _KIN and k - 1 not in taken and _gap_ok(text, toks[k - 1], toks[k]):
                 p = toks[k - 1]
                 w = p.t.lower()
-                if w in _KIN_BLOCK or len(_letters(p.t)) < 3 or _veto(p.t, False) or w in _STOP_AFTER:
+                if w in _KIN_BLOCK or len(_letters(p.t)) < 3 or _veto(p.t, False) or w in _STOP_AFTER or _asha_role(toks, k - 1):
                     continue
                 if _is_deva(p.t) and (p.t in L.HI_STOP):
                     continue
