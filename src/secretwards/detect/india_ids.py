@@ -41,7 +41,7 @@ _AADHAAR_MASKED = re.compile(
     r"(?<![\p{L}\d])(?:[xX*•●]{4}[ \-]?){2}\d{4}(?!\d)|(?<![\p{L}\d])[xX*]{8}\d{4}(?!\d)")
 _PAN = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{3}[ABCFGHJLPTEKabcfghjlptek][A-Za-z]\d{4}[A-Za-z](?![A-Za-z0-9])")
 
-# UPPERCASE prefix (optionally with digits, e.g. a year-coded "DHH2026") then >=1 separated digit groups.
+# UPPERCASE prefix (optionally with digits, e.g. a year-coded "XYZ2025") then >=1 separated digit groups.
 _HOSP_STRUCT = re.compile(
     r"(?<![\p{L}\d/\-])([A-Z]{2,6}\d{0,4}(?:[-/][A-Z]{1,6})?)((?:[-/]\d{2,8}){1,3})(?![\p{L}\d]|[-/]\d)")
 # "<something> No / No. / ID / Number / सं. / संख्या / क्रमांक" then ':' or '#' then the id token
