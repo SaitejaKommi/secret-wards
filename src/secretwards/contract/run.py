@@ -22,6 +22,7 @@ from ..contracts import PIIType, RedactedRecord
 from ..detect import default_detectors
 from ..detect.hidden import clean_encoded
 from ..detect.learned import NameMemory
+from ..fhir.sanitize import apply_bundle_policy, is_bundle
 from ..detect.merge import UUID_LIKE
 from ..link import link_documents
 from ..link.mention import build_mention
@@ -171,6 +172,9 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
                 results.pop(rec.doc.doc_id, None)
             e.parsed, e.reason = None, "internal_error"
 
+    for r in results.values():  # first pass: the names the policy marks as the patient's / a relative's (and not a doctor's) feed the name memory
+        if is_bundle(r.doc.fields):
+            apply_bundle_policy(r.doc.fields, r.units, r.spans)
     mem = NameMemory()
     for r in results.values():
         for u in r.units:
@@ -180,6 +184,10 @@ def _sanitize(inp: Path, out: Path, secret: bytes) -> dict:
             more = mem.find(u, r.spans[u.field])
             if more:
                 r.spans[u.field] = sorted(r.spans[u.field] + more, key=lambda s: (s.start, s.end))
+    for r in results.values():  # second pass, after the memory added spans: kept leaves stay clear
+        # FHIR Bundles: decide per leaf from the resource type (hospital names stay, patient names go)
+        if is_bundle(r.doc.fields):
+            apply_bundle_policy(r.doc.fields, r.units, r.spans)
 
     # ---- 3. link, quasi-identifier plan
     mention_of = {d: build_mention(r.doc, r.units, r.spans, r.meds) for d, r in results.items()}

@@ -175,9 +175,8 @@ def test_contract_run_with_policy(tmp_path, monkeypatch):
     assert [c for c, _ in validate_bundle(b) if c != "bad_element_name"] == []
 
 
-# The next two are in Saiteja's files (reported on the PR); non-strict so they do not block anyone.
-@pytest.mark.xfail(reason="contract/renamer.py holds_pii counts the ADDRESS hit address.py gives the word 'extension', "
-                          "so the FHIR element is renamed and the resource stops being valid R4")
+# The next one is in Saiteja's files (reported on the PR); non-strict so it does not block anyone.
+# fixed: contract/renamer.py no longer treats a plain lowercase schema word such as 'extension' as personal data
 def test_extension_element_keeps_its_name(tmp_path, monkeypatch):
     _raw, b = _run_with_policy(tmp_path, monkeypatch, bundle())
     assert "extension" in b["entry"][0]["resource"]

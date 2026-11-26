@@ -20,6 +20,7 @@ _SPLIT = re.compile(r"[_\-\s.()\[\]]+")
 _DIGITS = re.compile(r"\d{6,}")
 _CHUNK = re.compile(r"[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)*")
 _IDLIKE = re.compile(r"[A-Za-z]{1,6}[-/]?\d{5,}")
+_PLAIN_KEY = re.compile(r"[a-z]{3,24}")
 _SAFE_WORDS = (L.HEADER_WORDS | L.CLINICAL_WORDS | L.COMMON_WORDS)
 
 
@@ -48,7 +49,10 @@ class Renamer:
             if sum(c.isdigit() for c in chunk) >= 5 and any(c.isalpha() for c in chunk):
                 return True
         spaced = _SPLIT.sub(" ", text)
-        if self._detected(text) or self._detected(spaced):
+        # a plain lowercase word ("extension", "status", "telecom") is a schema term, not a person; without this the address
+        # detector read FHIR's "extension" as a street type and every bundle got a renamed element
+        schema_word = not filename and _PLAIN_KEY.fullmatch(text) is not None
+        if not schema_word and (self._detected(text) or self._detected(spaced)):
             return True
         if self.memory is not None and self.memory.find(make_unit("x", None, re.sub(r"(?<=[a-z])(?=[A-Z])", " ", spaced)), []):
             return True
