@@ -15,13 +15,13 @@ from .names import Tok, tokenize
 
 _HOUSE = re.compile(
     r"(?<![\p{L}\d])(?:h\.?\s?no\.?|house\s*(?:no\.?)?|flat\s*(?:no\.?)?|plot\s*(?:no\.?)?|room\s*(?:no\.?)?|door\s*no\.?|bldg\.?|building)"
-    r"\s*[:#.\-]?\s*[\w/\-]+", re.I)
+    r"\s*[:#.\-]?\s*(?=[\w/\-]*\d)[\w/\-]+", re.I)  # the value must hold a digit: "House surgeon" is a job, not a house
 _HOUSE_BARE = re.compile(r"(?<![\d/\p{L}])\d{1,4}\s*/\s*[A-Za-z0-9]{1,3}(?=\s*,)|(?<![\p{L}\d])#\s?\d+[\w/\-]*")
 _SUFFIX = (r"nagar|colony|vihar|road|rd|marg|chowk|enclave|puram|ganj|pur|basti|bazaar|bazar|lane|street|st|layout|society|"
            r"apartments?|apts?|complex|sector|phase|block|extension|ext|khand|tola|para|garh|abad|gali|mohalla|gaon|village|nagri|wadi|peth|mandi|"
            r"stand|chauraha|crossing|market|park|bagh|talab|kunj|dham|sadan|niwas|bhawan|bhavan")
 _SUFFIX_DEV = r"नगर|कॉलोनी|कालोनी|विहार|रोड|मार्ग|चौक|एन्क्लेव|पुरम|गंज|पुर|बस्ती|बाजार|गली|मोहल्ला|गाँव|गांव|सेक्टर|चौराहा|बाग|कुंज|धाम"
-_AREA = re.compile(rf"(?<![\p{{L}}])(?:{_SUFFIX})(?![\p{{L}}])(?!\s*[:/])(?:\s*(?:no\.?\s*)?\d{{1,3}}[A-Za-z]?)?", re.I)
+_AREA = re.compile(rf"(?<![\p{{L}}])(?:{_SUFFIX})(?![\p{{L}}])(?!\s*[:/])(?!\s+(?:count|counts|forming|cfu)(?![\p{{L}}]))(?:\s*(?:no\.?\s*)?\d{{1,3}}[A-Za-z]?)?", re.I)
 _AREA_DEV = re.compile(rf"(?<![/])(?:{_SUFFIX_DEV})(?![ऀ-ॿ])(?!\s*[:/])(?:\s*\d{{1,3}})?")
 _LANDMARK = re.compile(
     r"(?<![\p{L}])(?:near|nr\.?|behind|opp\.?|opposite|beside|next\s+to|adjacent\s+to|in\s+front\s+of|infront\s+of|close\s+to|back\s+of)\s+", re.I)
@@ -29,7 +29,7 @@ _LM_HINGLISH = re.compile(r"\s+ke\s+(?:paas|pass|samne|saamne|peeche|piche|bagal
 _LM_DEV = re.compile(r"\s+के\s+(?:पास|सामने|पीछे|बगल|नजदीक|निकट)")
 _VILLAGE = re.compile(
     r"(?<![\p{L}])(?:vill(?:age)?|post|p\.o\.?|thana|p\.s\.)\.?\s*[:\-]?\s+(?=[A-Z])|"
-    r"(?:ग्राम|गाँव|पोस्ट|थाना)(?![/:\s]*[/:])\s*[:\-]?\s*", re.I)
+    r"(?<!\d)(?<!\d\s)(?:ग्राम|गाँव|पोस्ट|थाना)(?![/:\s]*[/:])\s*[:\-]?\s*", re.I)  # "50 ग्राम" is a weight, not a village
 # a "City" / "Town" column in a rural export holds villages (redact); district / tehsil / state columns are what generalization keeps
 _KEEP_HDR = re.compile(r"district|distt|zila|jila|tehsil|tahsil|taluk|state|जिला|तहसील|राज्य", re.I)
 _KEEP_SEG = re.compile(r"^\s*(?:teh(?:sil)?\.?|tahsil|taluk[a]?|mandal|dist(?:t|rict)?\.?|zila|jila|state|तहसील|जिला|राज्य)(?![\p{L}])", re.I)
@@ -206,8 +206,9 @@ class AddressDetector:
                 i += 1
             if n:
                 spans.append((m.start(), e, 0.7))
-        # cities
-        for k, t in enumerate(toks):
+        # cities (a district / state column is kept on purpose: the district is a utility target)
+        kept_col = bool(unit.header and _KEEP_HDR.search(unit.header))
+        for k, t in enumerate([] if kept_col else toks):
             w = t.t.lower()
             if w in L.cities() and t.t[0].isupper():
                 spans.append((t.s, t.e, 0.8))

@@ -165,8 +165,7 @@ def test_non_patient_numbers_redacted_but_not_mrn(text, value):
     assert covered(text, value)
 
 
-# Pre-existing in the lead's detect/rules.py (_MRN_CUE types any "Reg No" as MRN). strict xfail: remove once fixed there.
-@pytest.mark.xfail(strict=True, reason="detect/rules.py _MRN_CUE types doctor / hospital Reg No as MRN")
+# fixed in detect/rules.py: a doctor's or hospital's Reg No is no longer typed as an MRN
 @pytest.mark.parametrize("text,value", [_NON_PATIENT[0], _NON_PATIENT[3]])
 def test_known_rules_py_mrn_on_facility_numbers(text, value):
     assert not [v for t, v in spans(text) if t == PIIType.MRN]

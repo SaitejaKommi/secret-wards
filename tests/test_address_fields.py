@@ -100,9 +100,7 @@ def test_medical_phrases_untouched(text, keep):
     assert untouched(text, keep), [(s.type, text[s.start:s.end]) for s in _spans(text)]
 
 
-# Pre-existing false positives of the lead's detect/address.py (not this detector; that file is not ours to edit).
-# strict xfail: these start "passing" (and fail the suite) once address.py is fixed, so the marker gets removed.
-@pytest.mark.xfail(strict=True, reason="detect/address.py suffix/village anchors fire on medical words")
+# fixed in detect/address.py / detect/rules.py (these used to be strict xfails)
 @pytest.mark.parametrize("text,keep", [
     ("Dal 50 ग्राम roz", "ग्राम"),
     ("Colony count >10^5 CFU/ml", "Colony count"),
