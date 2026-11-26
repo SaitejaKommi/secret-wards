@@ -68,8 +68,12 @@ def evaluate(a: Mention, b: Mention) -> PairResult:
             abha_equal = True
         else:
             veto = "abha_differs"
-    if set(a.mrn) & set(b.mrn) and a.hospital == b.hospital:
-        score += W_MRN
+    shared_ids = set(a.mrn) & set(b.mrn)
+    national = any(x.startswith(("AADHAAR", "PAN")) for x in shared_ids)
+    cross_site_mrn = bool(shared_ids) and not national and a.hospital != b.hospital
+    if shared_ids:
+        # a national id (Aadhaar / PAN) belongs to one person; a hospital number only does inside one hospital
+        score += W_MRN + (2.0 if national else 0.0) - (1.0 if cross_site_mrn else 0.0)
         strong.append("mrn")
     if set(a.emails) & set(b.emails):
         score += W_EMAIL
@@ -112,6 +116,10 @@ def evaluate(a: Mention, b: Mention) -> PairResult:
             veto = "name_conflict"
         elif conflict == 1:
             score -= 2.0
+    if cross_site_mrn and not (ta and tb and sim >= 0.5 and conflict == 0):
+        # the same hospital number at two different sites could be two people: the names must agree too
+        strong.remove("mrn")
+        score -= W_MRN - 1.0
     # --- relative (father / husband) names
     rel_best, rel_conflict = 0.0, 0
     for ra in a.rel_tokens:

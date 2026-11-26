@@ -107,3 +107,26 @@ def test_cluster_pseudonym_does_not_depend_on_input_order(keys):
     ms = [M("a", ["Rajesh", "Kumar"], phones=["9876543210"]), M("b", ["Rajesh", "Kumar"], phones=["9876543210"], hosp="H2"),
           M("c", ["Anil", "Gupta"], phones=["9000000001"])]
     assert clusters(ms, keys)[1] == clusters(list(reversed(ms)), keys)[1]
+
+
+# ---- shared patient ids across different documents / sites (synthetic values only)
+def test_same_national_id_links_across_sites():
+    a = M("a", name=("Asha", "Verma"), mrn=("AADHAAR111122223333",), hosp="lab")
+    b = M("b", name=("Asha", "Verma"), mrn=("AADHAAR111122223333",), hosp="opd")
+    r = evaluate(a, b)
+    assert "mrn" in r.strong and not r.veto
+
+
+def test_different_national_ids_do_not_link():
+    a = M("a", name=("Asha", "Verma"), mrn=("AADHAAR111122223333",), hosp="lab")
+    b = M("b", name=("Asha", "Verma"), mrn=("AADHAAR444455556666",), hosp="opd")
+    assert "mrn" not in evaluate(a, b).strong
+
+
+def test_same_hospital_number_at_two_sites_needs_agreeing_names():
+    same = evaluate(M("a", name=("Asha", "Verma"), mrn=("MRN0042",), hosp="X"), M("b", name=("Asha", "Verma"), mrn=("MRN0042",), hosp="Y"))
+    assert "mrn" in same.strong
+    other = evaluate(M("a", name=("Asha", "Verma"), mrn=("MRN0042",), hosp="X"), M("b", name=("Ravi", "Kulkarni"), mrn=("MRN0042",), hosp="Y"))
+    assert "mrn" not in other.strong
+    nameless = evaluate(M("a", name=("Asha", "Verma"), mrn=("MRN0042",), hosp="X"), M("b", mrn=("MRN0042",), hosp="Y"))
+    assert "mrn" not in nameless.strong
