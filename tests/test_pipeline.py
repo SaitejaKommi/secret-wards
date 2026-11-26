@@ -125,7 +125,8 @@ def test_determinism_across_processes_and_hash_seeds(tmp_path, keys_dir):
     digests = []
     for i, seed in enumerate(("1", "12345")):
         out = tmp_path / f"o{i}"
-        env = {**os.environ, "PYTHONHASHSEED": seed, "PYTHONIOENCODING": "utf-8"}
+        env = {**os.environ, "PYTHONHASHSEED": seed, "PYTHONIOENCODING": "utf-8",
+               "PYTHONPATH": os.pathsep.join(filter(None, [str(ROOT / "src"), os.environ.get("PYTHONPATH", "")]))}  # no editable install needed
         r = subprocess.run([sys.executable, "-X", "utf8", "-m", "secretwards", "run", "--in", str(data / "in"), "--out", str(out),
                             "--config", str(cfgp)], capture_output=True, env=env, cwd=ROOT, timeout=600)
         assert r.returncode == 0, r.stderr.decode("utf-8", "ignore")[-500:]
