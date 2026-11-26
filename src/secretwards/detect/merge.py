@@ -11,6 +11,7 @@ Rules
 from __future__ import annotations
 
 import bisect
+import re
 from typing import Sequence
 
 from ..contracts import MedKind, PIIType, Span
@@ -19,6 +20,9 @@ _PRIO = {
     PIIType.EMAIL: 100, PIIType.ABHA: 90, PIIType.INSURANCE: 85, PIIType.MRN: 80, PIIType.PHONE: 75,
     PIIType.ID: 70, PIIType.DATE: 66, PIIType.ADDRESS: 60, PIIType.PINCODE: 58, PIIType.NAME: 50,
 }
+# a UUID (FHIR resource id, urn:uuid reference) is a record key, not a patient number: digit runs inside it are not phones or dates
+UUID_LIKE = re.compile(r"(?<![0-9A-Za-z])(?=[0-9A-Fa-f-]{28,})[0-9A-Fa-f]{4,16}(?:-[0-9A-Fa-f]{3,16}){3,5}(?![0-9A-Za-z-])")
+# (also matches ids whose groups were overwritten with a phone number: those still have to be aliased, not blanked)
 _NUMERIC_GUARDED = {PIIType.ID, PIIType.PINCODE, PIIType.DATE, PIIType.MRN}
 _TEXT_GUARDED = {PIIType.NAME, PIIType.ADDRESS}
 
@@ -58,8 +62,17 @@ def merge(spans: Sequence[Span], meds: Sequence[tuple[int, int, MedKind]], text:
         i = bisect.bisect_right(n_starts, s0) - 1
         return i >= 0 and n_pmax[i] >= s1
 
+    uuids = [(m.start(), m.end()) for m in UUID_LIKE.finditer(text)] if "-" in text else []
+    u_starts = [a for a, _ in uuids]
+
+    def in_uuid(s0: int, s1: int) -> bool:
+        i = bisect.bisect_right(u_starts, s0) - 1
+        return i >= 0 and uuids[i][1] >= s1
+
     kept: list[Span] = []
     for s in spans:
+        if uuids and s.type != PIIType.EMAIL and in_uuid(s.start, s.end):
+            continue
         if s.type in _TEXT_GUARDED:
             ln = max(1, s.end - s.start)
             if text_cover(s.start, s.end) / ln >= 0.6 and s.score < 0.95:

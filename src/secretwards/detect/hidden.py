@@ -256,8 +256,8 @@ def clean_encoded(text: str, redact: Callable[[str], str]) -> str:
             continue
         if _B64.fullmatch(tok):
             new = base64.b64encode(cleaned.encode("utf-8")).decode("ascii")
-            if not tok.endswith("="):
-                new = new.rstrip("=")
+            if not tok.endswith("=") and len(tok) % 4 != 0:  # keep padding when the original length was a whole number of groups:
+                new = new.rstrip("=")  # the new text may be a different length and FHIR base64 needs complete groups of 4
         elif _HEX.fullmatch(tok):
             new = cleaned.encode("utf-8").hex()
             new = new.upper() if tok.isupper() else new
